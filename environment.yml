@@ -11,6 +11,7 @@ dependencies:
   - fiona
   - geopandas
   - git
+  - libgdal
   - matplotlib
   - numpy
   - path < 17
