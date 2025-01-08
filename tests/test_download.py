@@ -1,6 +1,5 @@
 
 from fordead.theia_preprocess import maja_download
-import re
 
 def test_download(output_dir):
     zip_dir = (output_dir / "download" / "zip").rmtree_p().makedirs_p()
