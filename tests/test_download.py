@@ -31,6 +31,7 @@ def test_download(output_dir):
         level="LEVEL2A",
         dry_run=False)
     
+    assert len(zip_files) == 1
 
     # # simulate old version
     # for f in unzip_files:
@@ -49,3 +50,5 @@ def test_download(output_dir):
         level="LEVEL2A",
         dry_run=False)
     
+    assert len(zip_files) == 2
+    assert sum([f.exists() for f in unzip_files])==1
