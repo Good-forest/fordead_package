@@ -5,3 +5,7 @@ draft
 build
 **/fordead_data
 **/outputs
+.Rproj.user
+.pytest_cache
+docs/examples
+*.zip

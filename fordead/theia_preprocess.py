@@ -11,21 +11,73 @@ import zipfile
 import tempfile
 import numpy as np
 import rasterio
-import time
 import re
-import sys
-from datetime import datetime, timedelta
+from datetime import timedelta
 from eodag import EODataAccessGateway
-
+from eodag.crunch import FilterProperty
+import pandas as pd
 
 from fordead.import_data import retrieve_date_from_string, TileInfo
+from fordead.stac.theia_collection import parse_theia_name
 
-
-def theia_download(tile, start_date, end_date, write_dir, lim_perc_cloud,
-                   login_theia=None, password_theia=None, level='LEVEL2A',
-                   unzip_dir = None, retry=10, wait=300, search_timeout=10):
+def get_local_maja_files(zip_dir, unzip_dir=None):
     """
-    Downloads Sentinel-2 acquisitions of the specified tile from THEIA from start_date to end_date under a cloudiness threshold
+    List the local maja files (zip and unzip) and 
+    some of there characteristics (version, empty zip, ...)
+    
+    Parameters
+    ----------
+    zip_dir : str
+        Path of the directory with zipped theia data.
+    unzip_dir : str, optional
+        Path of the directory with unzipped theia data. The default is None.
+
+    Returns
+    -------
+    pandas.DataFrame of the files
+    """
+    # unzip_dir / "merged_files.json"
+    zip_dir = Path(zip_dir)
+    zip_files = zip_dir.glob("SENTINEL*.zip")
+
+    if unzip_dir is not None:
+        unzip_dir = Path(unzip_dir)
+        unzip_files = unzip_dir.glob("SENTINEL*")
+    else:
+        unzip_files = []
+
+    # parse theia name
+    df_zip = pd.DataFrame({
+        "date": [retrieve_date_from_string(f) for f in zip_files],
+        "id": [re.sub(r'(.*)_[A-Z]$', r'\1',f.stem) for f in zip_files],
+        "zip_file": zip_files,
+        "zip_empty": [f.size == 22 for f in zip_files]
+        }) #.astype({"date": str, "id": str, "zip_file": str, "zip_empty": bool})
+
+    df_unzip = pd.DataFrame({
+        "id": [re.sub(r'(.*)_[A-Z]_V[0-9]-[0-9]$', r'\1',f.stem) for f in unzip_files],
+        "version": [re.sub(r".*_V([0-9]-[0-9])$", r"\1", Path(f).stem) for f in unzip_files],
+        "unzip_file": unzip_files,
+    }) #.astype({"id": str, "version": str, "unzip_file": str})
+
+    df = df_zip.merge(df_unzip, how="outer", on="id", left_index=False, right_index=False)
+    df["merged"] = df["date"].duplicated(keep=False)
+    merged_id = df.loc[df["merged"] & df["unzip_file"].isnull(), ["id", "date"]]
+    merged_id.rename(columns={"id":"merged_id"}, inplace=True)
+    df = df.merge(merged_id, how="left", on="date")
+
+    return df
+
+def maja_search(
+        tile: str,
+        start_date: str,
+        end_date: str = None,
+        lim_perc_cloud: float = 100,
+        level: str = 'LEVEL2A',
+        search_timeout: int = 10,):
+    """
+    Download Sentinel-2 L2A data processed with MAJA processing chain from
+    GEODES (CNES) plateform.
 
     Parameters
     ----------
@@ -35,20 +87,10 @@ def theia_download(tile, start_date, end_date, write_dir, lim_perc_cloud,
         Acquisitions before this date are ignored (format : "YYYY-MM-DD") 
     end_date : str
         Acquisitions after this date are ignored (format : "YYYY-MM-DD") 
-    write_dir : str
-        Directory where THEIA data is downloaded
     lim_perc_cloud : int
         Maximum cloud cover (%)
-    login_theia : str
-        Login of your theia account
-    password_theia : str, optional (see notes)
-        Password of your theia account
     level : str, optional (see notes)
-        Product level for reflectance products, can be 'LEVEL1C', 'LEVEL2A' or 'LEVEL3A'
-    retry : int, optional
-        Number of retries if download fails
-    wait : int, optional
-        Wait time between retries in seconds
+        Product level for reflectance products can be 'LEVEL2A' or 'LEVEL3A'
     search_timeout : int, optional
         Timeout in seconds for search of theia products. Default is 10.
         It updates the htttp request timeout for the search.
@@ -60,173 +102,293 @@ def theia_download(tile, start_date, end_date, write_dir, lim_perc_cloud,
 
     Notes
     -------
-    It is not recommended to write login and password
-    in a script, thus it is recommended to set 
-    theia credentials in $HOME/.config/eodag/eodag.yaml
-    in the subsection credentials of section theia.
+    See `maja_download()` for authentication details
+    """
 
-    In case $HOME/.config/eodag/eodag.yaml, run the following
-    in a python session, it should create the file:
+    if level == 'LEVEL2A':
+        product_type = 'S2_MSI_L2A_MAJA'
+        provider = 'geodes'
+        tile_arg = {"spaceborne:tile":re.sub(r'^([0-9].*)', r'T\1', tile)}
+    elif level == 'LEVEL3A':
+        product_type = 'S2_MSI_L3A_WASP'
+        provider = 'theia'
+        tile_arg = {"location":re.sub(r'^([0-9].*)', r'T\1', tile)}
+
+    if end_date is None:
+        end_date = str((pd.to_datetime(start_date) + timedelta(days=1)).date())
+
+    dag = EODataAccessGateway()
+    # dag._prune_providers_list()
+
+    if search_timeout is not None:
+        dag.providers_config[provider].search.timeout = search_timeout
+
+    # search products
+    search_args = {
+        "productType":product_type,
+        "start":start_date,
+        "end":end_date,
+        "cloudCover":lim_perc_cloud,
+        "provider":provider
+    }
+
+    search_args.update(tile_arg)
+
+
+    search_results = dag.search_all(**search_args)
+    
+    # issue: cloudCover criterium not working with geodes
+    search_results = search_results.crunch(
+        FilterProperty(dict(cloudCover=lim_perc_cloud, operator="lt"))
+    )
+
+    df_remote = []
+    for r in search_results:
+        # fix to keep a short id
+        r.properties["id"] = r.properties["identifier"]
+        # fix to keep same zip name as theia
+        r.properties["title"] = r.properties["identifier"]
+        date = retrieve_date_from_string(r.properties["identifier"])
+        props = dict(
+            id = re.sub(r'(.*)_[A-Z]', r'\1',r.properties["id"]),
+            date = date,
+            version = r.properties["versionInfo"],
+            cloud_cover = r.properties["cloudCover"],
+            product = r,
+        )
+        df_remote.append(props)
+    
+    df_remote = pd.DataFrame(df_remote)
+
+    return df_remote
+
+def categorize_search(search_results, zip_dir, unzip_dir):
+    # Merge the local file list with the remote search
+    # and add column status specifying the action to take
+    df_local = get_local_maja_files(zip_dir=zip_dir, unzip_dir=unzip_dir)
+    # df_columns = ['id', "date", 'zip_file', "zip_exists", 'unzip_file', "unzip_exists", "merged", "merged_id", "version"]
+   
+    df = df_local.merge(search_results, how="outer", on=["date","id"], suffixes=("_local", "_remote"))
+
+    def categorize(x):
+        if x["version_local"] == x["version_remote"]:
+            return "up_to_date"
+        elif pd.isnull(x["zip_file"]):
+            return "download"
+        elif not pd.isnull(x["version_local"]) and not pd.isnull(x["version_remote"]) and x["version_local"] != x["version_remote"]:
+            return "upgrade"
+        elif not x["zip_empty"] and pd.isnull(x["unzip_file"]):
+            try:
+                len(ZipFile(x["zip_file"]).namelist())
+                return "unzip"
+            except BadZipfile:
+                return "badzip"
+        else:
+            return "unknown"
+        
+    df["status"] = df.apply(lambda x : categorize(x), axis=1)
+
+    # extend download to duplicates if any
+    df.loc[df.date.duplicated(keep=False), "status"] = df.loc[df.date.duplicated(keep=False)].groupby(by="date")["status"].transform(lambda x: "download" if (x=="download").any() else x)
+
+    # extend upgrade to duplicates if any
+    df.loc[df.date.duplicated(keep=False), "status"] = df.loc[df.date.duplicated(keep=False)].groupby(by="date")["status"].transform(lambda x: "upgrade" if (x=="upgrade").any() else x)
+
+    return df
+
+
+def maja_download(
+        tile: str,
+        start_date: str,
+        end_date: str,
+        zip_dir: str,
+        unzip_dir: str,
+        lim_perc_cloud: float,
+        level: str = 'LEVEL2A',
+        bands: list = ["B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12", "CLMR2"],
+        correction_type: str = "FRE",
+        search_timeout: int = 10,
+        upgrade: bool = True,
+        dry_run: bool = True,
+):
+    """
+    Search, download, unzip and merge duplicates of Sentinel-2 L2A data processed with
+    MAJA processing chain from GEODES (CNES) plateform.
+
+    Parameters
+    ----------
+    tile : str
+        Name of the Sentinel-2 tile (format : "T31UFQ").
+    start_date : str
+        Acquisitions before this date are ignored (format : "YYYY-MM-DD") 
+    end_date : str
+        Acquisitions after this date are ignored (format : "YYYY-MM-DD") 
+    zip_dir : str
+        Directory where THEIA data is downloaded
+    unzip_dir : str
+        Directory where THEIA data is unzipped
+    lim_perc_cloud : int
+        Maximum cloud cover (%)
+    level : str, optional (see notes)
+        Product level for reflectance products, can be 'LEVEL2A' or 'LEVEL3A'
+    search_timeout : int, optional
+        Timeout in seconds for search of theia products. Default is 10.
+        It updates the htttp request timeout for the search.
+    bands : list, optional
+        List of bands to download. Default is ["B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12", "CLMR2"]
+    correction_type : str, optional
+        Correction type for radiometric correction. Default is "FRE".
+    upgrade : bool, optional
+        If True, checks product version and upgrades if needed
+    dry_run : bool, optional
+        If True, do not download or unzip products
+
+    Returns
+    -------
+    List
+        Files to unzip
+
+    Notes
+    -------
+    GEODES is the plateform used to download Sentinel-2 data.
+    In order to have download access to that plateform, you will
+    need to create an account at https://geodes.cnes.fr/ and create
+    an API key on that account.
+
+    The API key should then be specified in the section `geodes`
+    of the EODAG config file "$HOME/.config/eodag/eodag.yaml".
+    It should look like this:
+    ```yaml
+    geodes:
+        priority: # Lower value means lower priority (Default: 0)
+        search: # Search parameters configuration
+        auth:
+            credentials:
+                apikey: "write your api key here"
+        download:
+            extract:
+            output_dir:
+    ```
+
+    If $HOME/.config/eodag/eodag.yaml does not exists,
+    run the following in a python session, it should create the file:
     ```python
     from path import Path
     from eodag import EODataAccessGateway
+    
+    # creates the default config file at first call
     EODataAccessGateway()
-    print(Path("~").expand() / ".config" / "eodag" / "eodag.yml"))
+
+    # prints the path to the default config file, makes sure it exists
+    config_file = Path("~/.config/eodag/eodag.yml").expand()
+    print(config_file)
+    assert config_file.exists()
     ```
 
-    In the case there are special characters in your
-    login or password, make sure to add double quotes,
-    example:
-    ```yaml
-    theia:
-        priority: # Lower value means lower priority (Default: 0)
-        search:   # Search parameters configuration
-        download:
-            extract:
-            outputs_prefix:
-            dl_url_params:
-        auth:
-            credentials:
-                ident: "myemail@inrae.fr"
-                pass: "k5dFE9§~lkjqs"
-    ```
+    If the geodes section does not exist in the config file,
+    it must be that the config file template is not up to date
+    with EODAG v3+. In order to fix it, rename the file
+    "$HOME/.config/eodag/eodag.yaml" to "$HOME/.config/eodag/eodag.yaml.old"
+    and create a new with the above code.
+
+    If there are special characters in your API key,
+    make sure to add double quotes around it.
     """
 
-    if level == 'LEVEL1C':
-        product_type = 'S2_MSI_L1C'
-    elif level == 'LEVEL2A':
-        product_type = 'S2_MSI_L2A_MAJA'
-    elif level == 'LEVEL3A':
-        product_type = 'S2_MSI_L3A_WASP'
+    if level == "LEVEL3A" : correction_type = "FRC"
 
-    done = False
-    trials = 0
-    while not done:
-        dag = EODataAccessGateway()
-        # dag._prune_providers_list()
+    search = maja_search(
+        tile=tile,
+        start_date=start_date,
+        end_date=end_date,
+        lim_perc_cloud=lim_perc_cloud,
+        level=level,
+        search_timeout=search_timeout)
+    
+    df = categorize_search(search, zip_dir, unzip_dir)
 
-        if login_theia is not None and password_theia is not None:
-            dag.providers_config["theia"].auth.credentials.update(
-                {
-                    "ident": login_theia,
-                    "pass": password_theia
-                }
-            )
-        if search_timeout is not None:
-            dag.providers_config["theia"].search.timeout = search_timeout
+    # merged products set to upgrade by extension may not be part of search
+    # because of cloud cover limit, thus they are added a-posteriori
+    if any(df["status"].isin(["upgrade", "download"]) & df["product"].isnull()):
+        df_issue = df[(df['status'] == 'upgrade') & df['product'].isnull()]
+        message = '\n'.join(df_issue['id'])
+        print("Products meant to be upgraded and merged but not included in the search results are added:"
+                           f"\n{message}")
+        for d in df_issue["date"]:
+            search_sup = maja_search(
+                tile=tile,
+                start_date=d,
+                end_date = str((pd.to_datetime(d) + timedelta(days=1)).date()),
+                lim_perc_cloud=100,
+                level=level,
+                search_timeout=search_timeout)
+            search_sup = search_sup[~search_sup["id"].isin(search["id"])]
+            message = '\n'.join(search_sup["id"])
+            print(f"Product added to search results: {message}")
+            search = pd.concat([search, search_sup]).sort_values("date", ignore_index=True) # add to search
 
-        # search products
-        search_args = dict(
-            productType=product_type,
-            start=start_date,
-            end=end_date,
-            location=re.sub(r'^([0-9].*)', r'T\1', tile),
-            cloudCover=lim_perc_cloud,
-            provider="theia"
-        )
+        df = categorize_search(search, zip_dir, unzip_dir)
+    
+    # keep only search results
+    df = df[df["product"].notna()]
 
-        try:
-            search_results = dag.search_all(**search_args)
-        except Exception as e:
-            print("search failed : ", e)
-            if trials==retry:
-                raise RuntimeError("\nRetry limit reached.\n")
-            else:
-                trials+=1
-                print(f"\nRetries in {wait} seconds {trials}/{retry} ...\n")
-                time.sleep(wait)
-                continue
+    if upgrade:
+        df_download = df[df["status"].isin(["upgrade", "download", "badzip"])]
+    else:
+        df_download = df[df["status"].isin(["download", "badzip"])]
 
-        # Several failure can happen: remote onnection closed, authentication error, empty download.
-        # We will loop until we get all products or until we reach the number of retries.
+    unzipped = df[df["status"]=="up-to-date"]
+    to_unzip = df[df["status"]=="unzip"]
+    to_upgrade = df_download[df_download["status"]=="upgrade"]
+    to_download = df_download[df_download["status"].isin(["download", "badzip"])]
+    
+    if len(unzipped):
+        unzipped_str = '\n'.join(unzipped["id"])
+        print(f"Products already unzipped:\n{unzipped_str}\n")
+    if len(to_unzip):    
+        to_unzip_str = '\n'.join(to_unzip["id"])
+        print(f"Products already downloaded to unzip ({len(to_unzip)}):\n{to_unzip_str}\n")
+    if len(to_upgrade):
+        to_upgrade_str = '\n'.join(to_upgrade.apply(lambda x: f"{x['id']} ({x['version_local']} -> {x['version_remote']})", axis=1))
+        print(f"Products to upgrade ({len(to_upgrade)}):\n{to_upgrade_str}\n")
+    if len(to_download):
+        to_download_str = '\n'.join(to_download.apply(lambda x: f"{x['id']} ({x['version_remote']})", axis=1))
+        print(f"Products to download ({len(to_download)}):\n{to_download_str}\n")
 
-        # distribute search results among the different categories
-        unzipped = []
-        merged = []
-        to_unzip = []
-        to_download = [] 
-        for r in search_results:
-            zip_file = Path(write_dir) / (r.properties['id']+".zip")
-            unzip_file = []
-            if unzip_dir is not None:
-                id = re.sub(r'(.*)_[A-Z]', r'\1',r.properties['id'])
-                unzip_file = Path(unzip_dir).glob(f'{id}_[A-D]_V*')
-            if len(unzip_file)>0:
-                unzipped.append(unzip_file[0])
-            elif zip_file.exists():
-                try:
-                    zip_len = len(ZipFile(zip_file).namelist())
-                    if zip_len==0:
-                        merged.append(zip_file)
-                    else:
-                        # products downloaded but not unzipped
-                        to_unzip.append(zip_file)
-                except BadZipfile:
-                    print(f"Bad zip file, removing file: {zip_file}")
-                    Path(zip_file).remove()
-                    to_download.append(r)    
-            else:
-                to_download.append(r)
-        
-        
-        if len(unzipped):
-            unzipped_str = '\n'.join(unzipped)
-            print(f"Products already unzipped:\n{unzipped_str}\n")
-        if len(merged):
-            merged_str = '\n'.join(merged)
-            print(f"Products considered as merged:\n{merged_str}\n")
-        if to_unzip:
-            to_unzip_str = '\n'.join(to_unzip)
-            print(f"Products already downloaded but not unzipped:\n{to_unzip_str}\n")
-        print(f'{len(search_results)-len(to_download)} files already downloaded or unzipped, {len(to_download)} files left to download.')
-        if len(to_download):
-            print(f"Downloading products: {to_download}")
 
-        # start downloading
-        downloaded = []
-        failed = 0
-        if len(to_download) == 0:
-            done = True
-        else:
-            try:
-                for d in to_download:
-                    res = dag.download(d,
-                        outputs_prefix=write_dir,
-                        extract=False)
-                    print(f"{d.properties['id']}: {res}")
-                    if res is None or not Path(res).exists():
-                        failed += 1
-                        if len(failed) >= 10:
-                            raise RuntimeError("Failed 10 times in a row, reinitializing download.")
-                    else:
-                        failed = 0
-                        downloaded.append(res)
-                # downloaded = dag.download_all(to_download,
-                #             outputs_prefix=write_dir,
-                #             extract=False)
-            except Exception as e:
-                    print(f"Download failed with error: {e}")
+    downloaded = []
+    unzipped = []
+    if dry_run:
+        print("Dry run, nothing has been downloaded")
+    else:
+        for r in df_download.itertuples():
+            with tempfile.TemporaryDirectory(dir=zip_dir) as tmpdir:
+                file = r.product.download(output_dir=tmpdir, extract=False)
+                # remove old unzip if already there
+                if pd.notna(r.unzip_file):
+                    try:
+                        print("Removing old unzip: ", r.unzip_file)
+                        r.unzip_file.rmtree()
+                    except Exception as e:
+                        print("Failed to remove", r.unzip_file)
+                        raise e
+                # overwrites if exists
+                zip_file = Path(file).move(zip_dir / Path(file).name)
+            unzip_file = s2_unzip(zip_file, unzip_dir, bands, correction_type)
+            print("Replaces by empty zip: " + zip_file)
+            zip_file.remove()
+            zipObj = ZipFile(zip_file, 'w')
+            zipObj.close()
 
-            # check all downloaded files exists and correct zip
-            for f in downloaded:
-                try:
-                    ZipFile(f).namelist()
-                except BadZipfile:
-                    print(f"Bad zip file, removing file: {f}")
-                    Path(f).remove()
-                    downloaded.remove(f)
-            
-            # check all files were downloaded
-            if len(to_download) == len(downloaded):
-                done=True
-                print(f"\nDownload done after {trials} retries!\n")
-            elif trials==retry:
-                raise RuntimeError("\nRetry limit reached.\n")
-            else:
-                trials+=1
-                print(f"\nRetries in {wait} seconds {trials}/{retry} ...\n")
-                time.sleep(wait)
-    return to_unzip + downloaded
+            downloaded.append(zip_file)
+            unzipped.append(unzip_file)
+        # TODO merge only the results of search
+        merge_same_date(bands, unzip_dir)
+    
+    return downloaded, unzipped
+
+
+
 
 BAND_NAMES = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B11', 'B12',
               'CLMR1', 'CLMR2', 'EDGR1', 'EDGR2', 'SATR1', 'SATR2',
@@ -297,7 +459,7 @@ def s2_unzip(s2zipfile, out_dir, bands, correction_type):
                                 if fileName.endswith(corrBand[i]): #Si le nom de fichier finit par ce qui correspond à la bande
                                     zipObj.extract(fileName, tmpdir)
                     (tmpdir / root_dir.name).move(out_dir)
-            
+            return out_dir / root_dir.name    
     except BadZipfile:
         print(f"Bad zip file, removing file: {s2zipfile}")
         s2zipfile.remove()

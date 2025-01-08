@@ -1,3 +1,15 @@
+# v1.11.0
+## Change
+- download MAJA archives from GEODES instead of THEIA:
+  - rename `theia_download` to `maja_download`: more appropriate
+  - unzip and merge are now done inside `maja_download`, see new args
+  - add arg `upgrade` to check for MAJA version upgrade
+  - add arg `dry_run` in order to print actions without doing them
+  - remove args `login` and `password`: not a good practice
+  - remove arg `empty_zip`: it was mandatory to track scene merges
+  - remove args `retry` and `wait`, should not be necessary anymore
+  - add download tests
+
 # v1.10.1
 ## Add
 - new `theiastac` provider for calibration/validation: extract values from
