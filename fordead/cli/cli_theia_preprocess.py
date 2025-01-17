@@ -6,7 +6,7 @@ Module with the theia preprocess function and a corresponding command line.
 import click
 from path import Path
 from datetime import date
-from fordead.theia_preprocess import unzip_theia, merge_same_date, delete_empty_zip, maja_download
+from fordead.theia_preprocess import maja_download
 
 
 @click.command(name='theia_preprocess')
@@ -21,6 +21,7 @@ from fordead.theia_preprocess import unzip_theia, merge_same_date, delete_empty_
 @click.option("-c", '--correction_type', type = click.Choice(['SRE', 'FRE', 'FRC'], case_sensitive=False),  help='Chosen correction type (SRE or FRE for LEVEL2A data, FRC for LEVEL3A)', default='FRE', show_default=True)
 @click.option("--search_timeout", type=int, default=10, help = "Search time out in seconds", show_default=True)
 @click.option("--upgrade", is_flag=True, help = "Upgrade product version", show_default=True)
+@click.option("--empty_zip", is_flag=True, help = "Empty zip files", show_default=True)
 @click.option("--dry_run", is_flag=True, help = "Dry run, no data is downloaded or unzipped", show_default=True)
 def cli_theia_preprocess(**kwargs):
     """
@@ -36,7 +37,7 @@ def cli_theia_preprocess(**kwargs):
 def theia_preprocess(zipped_directory, unzipped_directory, tiles,
                      level = "LEVEL2A", start_date = "2015-06-23", end_date = None, lim_perc_cloud = 50,
                      bands = ["B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12", "CLMR2"], 
-                     correction_type = "FRE", search_timeout=10, upgrade = False, dry_run = True):
+                     correction_type = "FRE", search_timeout=10, upgrade = False, empty_zip = False, dry_run = True):
     """
     Download Sentinel-2 zip files from GEODES (LEVEL2A) or THEIA (LEVEL3A) portal, 
     extract band files and eventually merge tile+date duplicates.
@@ -70,6 +71,10 @@ def theia_preprocess(zipped_directory, unzipped_directory, tiles,
         Chosen correction type (SRE or FRE for LEVEL2A data, FRC for LEVEL3A)
     search_timeout : int, optional
         Search timeout in seconds. The default is 10.
+    upgrade : bool, optional
+        Upgrade product version. The default is False.
+    empty_zip : bool, optional
+        Empty zip files. The default is False.
     dry_run : bool, optional
         If True, no data is downloaded. The default is True.
     Returns
@@ -90,16 +95,14 @@ def theia_preprocess(zipped_directory, unzipped_directory, tiles,
         print("\n Downloading THEIA data for tile " + tile + "\n")
         tile_zip_dir = (zipped_directory / tile).mkdir_p()   
         tile_unzip_dir = (unzipped_directory / tile).mkdir_p()
-        
-
-        delete_empty_zip(tile_zip_dir, tile_unzip_dir) #Deletes empty zip files if the unzipped directory is missing
-        
+                
         maja_download(
             tile=tile,
             start_date=start_date,
             end_date=end_date,
             zip_dir=tile_zip_dir,
             unzip_dir=tile_unzip_dir,
+            empty_zip=empty_zip,
             lim_perc_cloud=lim_perc_cloud,
             level=level,
             bands=bands,

@@ -5,6 +5,7 @@ Created on Tue Feb 16 13:53:50 2021
 @author: Raphael Dutrieux
 @author: Florian de Boissieu
 """
+import json
 from path import Path
 from zipfile import ZipFile, BadZipfile
 import zipfile
@@ -46,6 +47,15 @@ def get_local_maja_files(zip_dir, unzip_dir=None):
     else:
         unzip_files = []
 
+    for f in unzip_files:
+        merged_file =  f/"merged_scenes.json"
+        if merged_file.is_file():
+            with open(merged_file, "r") as f:
+                merged_list = json.load(f)
+            for v in merged_list.values():
+                if f in v:
+                    unzip_files.append(unzip_dir/f)
+
     # parse theia name
     df_zip = pd.DataFrame({
         "date": [retrieve_date_from_string(f) for f in zip_files],
@@ -61,8 +71,11 @@ def get_local_maja_files(zip_dir, unzip_dir=None):
     }) #.astype({"id": str, "version": str, "unzip_file": str})
 
     df = df_zip.merge(df_unzip, how="outer", on="id", left_index=False, right_index=False)
+    # TODO: in next version remove list of zip_files to use only merged_scenes.json
+    # to identify merged scenes. As a consequence, all duplictates without a merged_scenes.json
+    # will be redownloaded. See also TODO in maja_search.
     df["merged"] = df["date"].duplicated(keep=False)
-    merged_id = df.loc[df["merged"] & df["unzip_file"].isnull(), ["id", "date"]]
+    merged_id = df.loc[df["merged"] & df["unzip_file"].notna(), ["id", "date"]]
     merged_id.rename(columns={"id":"merged_id"}, inplace=True)
     df = df.merge(merged_id, how="left", on="date")
 
@@ -166,12 +179,14 @@ def maja_search(
         props = dict(
             id = re.sub(r'(.*)_[A-Z]', r'\1',r.properties["id"]),
             date = date,
-            version = r.properties["versionInfo"],
+            # version 4.0 converted to "4-0"
+            version = re.sub(r'\.', '-', str(r.properties["versionInfo"])),
             cloud_cover = r.properties["cloudCover"],
             product = r,
         )
         df_remote.append(props)
-    
+    if len(df_remote) == 0:
+        return pd.DataFrame(dict(id=[], date=[], version=[], cloud_cover=[], product=[]))
     df_remote = pd.DataFrame(df_remote)
 
     return df_remote
@@ -181,22 +196,17 @@ def categorize_search(search_results, zip_dir, unzip_dir):
     # and add column status specifying the action to take
     df_local = get_local_maja_files(zip_dir=zip_dir, unzip_dir=unzip_dir)
     # df_columns = ['id', "date", 'zip_file', "zip_exists", 'unzip_file', "unzip_exists", "merged", "merged_id", "version"]
-   
+        
     df = df_local.merge(search_results, how="outer", on=["date","id"], suffixes=("_local", "_remote"))
 
     def categorize(x):
         if x["version_local"] == x["version_remote"]:
             return "up_to_date"
+        # TODO: in next version replace test on zip_file with test on merged, see previous TODO
         elif pd.isnull(x["zip_file"]):
             return "download"
         elif not pd.isnull(x["version_local"]) and not pd.isnull(x["version_remote"]) and x["version_local"] != x["version_remote"]:
             return "upgrade"
-        elif not x["zip_empty"] and pd.isnull(x["unzip_file"]):
-            try:
-                len(ZipFile(x["zip_file"]).namelist())
-                return "unzip"
-            except BadZipfile:
-                return "badzip"
         else:
             return "unknown"
         
@@ -217,7 +227,8 @@ def maja_download(
         end_date: str,
         zip_dir: str,
         unzip_dir: str,
-        lim_perc_cloud: float,
+        empty_zip: bool = True,
+        lim_perc_cloud: float = 100,
         level: str = 'LEVEL2A',
         bands: list = ["B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12", "CLMR2"],
         correction_type: str = "FRE",
@@ -241,6 +252,8 @@ def maja_download(
         Directory where THEIA data is downloaded
     unzip_dir : str
         Directory where THEIA data is unzipped
+    empty_zip : bool
+        If True, empty zip file after unzipping to save storage
     lim_perc_cloud : int
         Maximum cloud cover (%)
     level : str, optional (see notes)
@@ -259,8 +272,8 @@ def maja_download(
 
     Returns
     -------
-    List
-        Files to unzip
+    tuple
+        downloaded, unzipped
 
     Notes
     -------
@@ -324,7 +337,7 @@ def maja_download(
     # merged products set to upgrade by extension may not be part of search
     # because of cloud cover limit, thus they are added a-posteriori
     if any(df["status"].isin(["upgrade", "download"]) & df["product"].isnull()):
-        df_issue = df[(df['status'] == 'upgrade') & df['product'].isnull()]
+        df_issue = df[df['status'].isin(["upgrade", "download"]) & df['product'].isnull()]
         message = '\n'.join(df_issue['id'])
         print("Products meant to be upgraded and merged but not included in the search results are added:"
                            f"\n{message}")
@@ -377,7 +390,8 @@ def maja_download(
     else:
         for r in df_download.itertuples():
             with tempfile.TemporaryDirectory(dir=zip_dir) as tmpdir:
-                file = r.product.download(output_dir=tmpdir, extract=False)
+                tmpzip_file = r.product.download(output_dir=tmpdir, extract=False)
+                tmpzip_file = Path(tmpzip_file)
                 # remove old unzip if already there
                 if pd.notna(r.unzip_file):
                     try:
@@ -386,13 +400,15 @@ def maja_download(
                     except Exception as e:
                         print("Failed to remove", r.unzip_file)
                         raise e
+                tmpunzip_file = s2_unzip(tmpzip_file, tmpdir, bands, correction_type)
+                if empty_zip:
+                    print("Replaces by empty zip: " + tmpzip_file.name)
+                    tmpzip_file.remove()
+                    zipObj = ZipFile(tmpzip_file, 'w')
+                    zipObj.close()
                 # overwrites if exists
-                zip_file = Path(file).move(zip_dir / Path(file).name)
-            unzip_file = s2_unzip(zip_file, unzip_dir, bands, correction_type)
-            print("Replaces by empty zip: " + zip_file)
-            zip_file.remove()
-            zipObj = ZipFile(zip_file, 'w')
-            zipObj.close()
+                zip_file = tmpzip_file.move(zip_dir / Path(tmpzip_file).name)
+                unzip_file = tmpunzip_file.move(unzip_dir / Path(tmpunzip_file).name)
 
             downloaded.append(zip_file)
             unzipped.append(unzip_file)
@@ -582,50 +598,50 @@ def merge_same_date(bands,out_dir):
     # tile = TileInfo(out_dir)
     # tile.getdict_datepaths("SENTINEL",tile.data_directory)
 
-    
+    merged_file_name = "merged_scenes.json"
     for date in np.unique(np.array(SenDateList)):
         if np.sum(np.array(SenDateList)==date)>1:
             print("Doublon détecté à la date : " + date)
             Doublons=np.array(SenPathList)[np.array(SenDateList)==date]
             Doublons = [Path(f) for f in Doublons]
-            #MOSAIQUE BANDES
-            
-            for band in bands:
-                if band != "CLMR2":
-                    print("Fusion bande : " + band)
-                    for doublon in Doublons:
-                        # PathBande=doublon+"/"+os.path.basename(doublon)+"_FRE_"+band+".tif"
+            Doublons.sort()
+            # check if already merged
+            for doublon in Doublons:
+                if (doublon / merged_file_name).exists():
+                    raise Exception("Doublon "+doublon.name+" already merged.")
+
+            with tempfile.TemporaryDirectory(dir=out_dir) as tempdir:
+                tmpdir = Path(tempdir)
+
+                # mosaic bands of the same date
+                for band in bands:
+                    if band == "CLMR2":
+                        PathBande=doublon /  "MASKS" / (doublon.name +"_CLM_R2.tif")
+                        na_value=0
+                    else:
                         PathBande=doublon / (doublon.name +"_FRE_"+band+".tif")
+                        na_value=-10000
+                    print("Mosaic same date band : " + band)
+                    for doublon in Doublons:
                         with rasterio.open(PathBande) as RasterBand:
                             if doublon==Doublons[0]:
                                 MergedBand=RasterBand.read(1)
                                 ProfileSave=RasterBand.profile
                             else:
                                 AddedBand=RasterBand.read(1)
-                                MergedBand[AddedBand!=-10000]=AddedBand[AddedBand!=-10000]
+                                MergedBand[AddedBand!=na_value]=AddedBand[AddedBand!=na_value]
                     
-                    for doublon in Doublons:
-                        if doublon==Doublons[0]:
-                            # with rasterio.open(doublon+"/"+os.path.basename(doublon)+"_FRE_"+band+".tif", 'w', **ProfileSave) as dst:
-                            with rasterio.open(doublon /(doublon.name +"_FRE_"+band+".tif"), 'w', **ProfileSave) as dst:
-                                    dst.write(MergedBand,indexes=1)
-            
-            print("Fusion masque")
-            #MOSAIQUE MASQUE THEIA
-            for doublon in Doublons:
-                    PathBande=doublon /  "MASKS" / (doublon.name +"_CLM_R2.tif")
-                    with rasterio.open(PathBande) as RasterBand:
-                        if doublon==Doublons[0]:
-                            MergedBand=RasterBand.read(1)
-                            ProfileSave=RasterBand.profile
-                        else:
-                            AddedBand=RasterBand.read(1)
-                            MergedBand[AddedBand!=0]=AddedBand[AddedBand!=0]
+                    with rasterio.open(tmpdir /(Doublons[0].name +"_FRE_"+band+".tif"), 'w', **ProfileSave) as dst:
+                        dst.write(MergedBand,indexes=1)
                 
-            for doublon in Doublons:
-                if doublon==Doublons[0]:
-                    with rasterio.open(doublon /  "MASKS" / (doublon.name +"_CLM_R2.tif"), 'w', **ProfileSave) as dst:
-                            dst.write(MergedBand,indexes=1)
-                else:
-                    doublon.rmtree() #Supprime les inutiles
-                    print("Suppression doublons")
+                # add a file that specifies the scene was merged with others
+                with open(tmpdir / merged_file_name, "w") as f:
+                    json.dump({Doublons[0].name:[d.name for d in Doublons]},f, indent=4)
+                    
+                # remove merged scenes
+                for doublon in Doublons:
+                    doublon.rmtree()
+                
+                # move merged scene to original directory
+                tmpdir.move(Doublons[0])
+

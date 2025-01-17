@@ -6,9 +6,9 @@
   - add arg `upgrade` to check for MAJA version upgrade
   - add arg `dry_run` in order to print actions without doing them
   - remove args `login` and `password`: not a good practice
-  - remove arg `empty_zip`: it was mandatory to track scene merges
   - remove args `retry` and `wait`, should not be necessary anymore
   - add download tests
+- remove function `delete_empty_zip`
 - dependency constraints:
   - remove on python version
   - path >=17
