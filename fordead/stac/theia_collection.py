@@ -123,7 +123,7 @@ DEFAULT_GDAL_ENV = stackstac.rio_reader.LayeredEnv(
 def valid_name(x, pattern, directory=False):
    x = Path(x)
    reg = re.compile(pattern)
-   if len(reg.findall(x.name))==1 and (x.isdir() == directory):
+   if len(reg.findall(x.name))==1 and (x.is_dir() == directory):
       return True
    else:
       return False
@@ -598,8 +598,13 @@ class MyTheiaImage(object):
 
     def get_band_files(self):
         band_files = [f for f in self.image_dir.files() if valid_name(f, theia_band_pattern)]
-        band_files.append((self.image_dir / "MASKS").glob("*CLM_R2.tif")[0])
+        clm_masks = (self.image_dir / "MASKS").glob("*CLM_R*.tif")
+        if len(clm_masks) == 0:
+            raise FileNotFoundError(f"File *CLM_Rx.tif not found in {self.image_dir}")
+        if len(clm_masks) > 1:
+            raise ValueError(f"Multiple files *CLM_Rx.tif found in {self.image_dir}")
         
+        band_files.append(clm_masks[0])
         return band_files
 
     def create_assets(self):

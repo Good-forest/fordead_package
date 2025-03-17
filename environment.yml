@@ -11,16 +11,21 @@ dependencies:
   - fiona
   - geopandas
   - git
+  - libgdal
   - matplotlib
   - numpy
-  - path < 17
+  - path >= 17
   - pathlib
   - pip
   - planetary-computer
   - plotly
-  # issue with pytest and vscode: https://github.com/microsoft/vscode-python-debugger/issues/498
+  # for eodag >= 3 and platform Windows,
+  # see orjson dep. in eodag/setup.cfg
   - python < 3.12
-  - pystac
+  # see changes of pystac 1.12 in changelog
+  # due to changes in projection extension
+  # (proj:code instead of proj:epsg)
+  - pystac < 1.12
   - pytest
   - rasterio
   - rioxarray
@@ -37,7 +42,8 @@ dependencies:
   # additionnal dependencies for dinamis-sdk
   - appdirs
   - qrcode
-  
+  - pydantic
+  - pydantic-settings
   - pip:
     # ensure that stac-geoparquet v0.3.2+ (conda version is too old),
     # dependency of stac-static

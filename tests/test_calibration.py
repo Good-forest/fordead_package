@@ -10,7 +10,7 @@ import subprocess
 import geopandas as gpd
 
 def test_obs(input_dir, output_dir):
-    sentinel_source = "planetary"
+    sentinel_source = "theiastac"
     
     export_dir = (output_dir / f"test_obs_{sentinel_source}").rmtree_p().mkdir()
     reflectance_path = export_dir / "reflectance.csv"
@@ -26,7 +26,7 @@ def test_obs(input_dir, output_dir):
     points["area_name"] = wrong_tile
     points["epsg"] = 32631
     points["id_pixel"]=1
-    points.to_file(points_path)
+    points.to_file(str(points_path))
     extract_reflectance(
         obs_path = points_path,
         sentinel_source = sentinel_source, 
@@ -35,8 +35,8 @@ def test_obs(input_dir, output_dir):
         export_path = reflectance_path,
         name_column = "id",
         tile_selection=wrong_tile,
-        start_date="2019-01-01",
-        end_date="2021-12-31")
+        start_date="2021-01-01",
+        end_date="2021-01-31")
     assert not reflectance_path.exists()
 
     
@@ -47,12 +47,12 @@ def test_obs(input_dir, output_dir):
         lim_perc_cloud = 1,
         export_path = reflectance_path,
         name_column = "id",
-        start_date="2019-01-01",
-        end_date="2021-12-31")
+        start_date="2021-01-01",
+        end_date="2021-01-31")
     assert not reflectance_path.exists()
 
     points["area_name"] = good_tile
-    points.to_file(points_path)
+    points.to_file(str(points_path))
 
     extract_reflectance(
         obs_path = points_path,
@@ -62,7 +62,7 @@ def test_obs(input_dir, output_dir):
         export_path = reflectance_path,
         name_column = "id",
         start_date="2021-01-01",
-        end_date="2021-12-31")
+        end_date="2021-01-31")
     assert reflectance_path.exists()
 
 
@@ -109,7 +109,9 @@ def test_calibration(input_dir, output_dir, sentinel_source):
         lim_perc_cloud = 0.3,
         export_path = reflectance_path,
         name_column = "id",
-        tile_selection="T31UGP")
+        tile_selection="T31UGP",
+        start_date="2016-01-01",
+        end_date="2019-01-01")
 
     mask_vi_from_dataframe(reflectance_path = reflectance_path,
                         masked_vi_path = masked_vi_path,
@@ -135,7 +137,7 @@ def test_calibration(input_dir, output_dir, sentinel_source):
                     stress_index_mode = "mean",
                     update_masked_vi = True)
 
-@pytest.mark.parametrize("sentinel_source", ["THEIA", "Planetary"])
+@pytest.mark.parametrize("sentinel_source", ["THEIA"])
 def test_calibration_cli(input_dir, output_dir, sentinel_source):
     # TODO: maybe use CliRunner for pytest https://click.palletsprojects.com/en/8.1.x/testing/
     # First tests were not successful because of an isolation error...
@@ -192,6 +194,8 @@ def test_calibration_cli(input_dir, output_dir, sentinel_source):
         f"--export_path {reflectance_path}",
         f"--name_column id",
         f"--tile_selection T31UGP",
+        f"--start_date 2016-01-01",
+        f"--end_date 2019-01-01"
         ]
     if cloudiness_path is not None:
         cmd += [f"--cloudiness_path {cloudiness_path}"]

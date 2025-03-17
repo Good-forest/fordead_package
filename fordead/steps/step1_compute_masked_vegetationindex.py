@@ -10,6 +10,7 @@ from pathlib import Path
 # import geopandas as gp
 import numpy as np
 from tqdm import tqdm
+import warnings
 #%% ===========================================================================
 #   IMPORT FORDEAD MODULES 
 # =============================================================================
@@ -131,12 +132,25 @@ def compute_masked_vegetationindex(
   
     # If parameters added differ from previously used parameters, all previous computation results are deleted
     if tile.parameters["Overwrite"] : 
-        tile.delete_dirs("VegetationIndexDir", "MaskDir","coeff_model", "AnomaliesDir","state_dieback", "state_soil","periodic_results_dieback","result_files","timelapse","series", "nb_periods_stress")
+        tile.delete_dirs("VegetationIndexDir", "MaskDir", "coeff_model", "AnomaliesDir",
+                         "state_dieback", "state_soil", "periodic_results_dieback",
+                         "result_files","timelapse","series", "nb_periods_stress")
         tile.delete_files("sufficient_coverage_mask","too_many_stress_periods_mask")
         tile.delete_attributes("last_computed_anomaly","dates","last_date_export")
 
     # All SENTINEL data in the input directory is detected, and paths are added to the TileInfo object. For example, after this operation tile.paths["Sentinel"]["YYYY-MM-DD"]["B2"] brings up the path to the B2 band file of the specified date?
+    # check if upgrade is needed
+    sentinel_bkp = None
+    if "Sentinel" in tile.paths:
+        sentinel_bkp = tile.paths["Sentinel"]
     tile.getdict_datepaths("Sentinel",Path(input_directory)) #adds a dictionnary to tile.paths with key "Sentinel" and with value another dictionnary where keys are ordered and formatted dates and values are the paths to the directories containing the different bands
+    # warn if upgrade detected in sentinel source
+    if sentinel_bkp is not None:
+        for date in sentinel_bkp:
+            if date in tile.paths["Sentinel"] and sentinel_bkp[date]["B8A"].parent.name != tile.paths["Sentinel"][date].name:
+                warnings.warn(
+                    "Input data has changed at " + str(date) + 
+                    ". Remove previously computed results to update to new input source.")
     tile.paths["Sentinel"] = get_band_paths(tile.paths["Sentinel"]) #Replaces the paths to the directories for each date with a dictionnary where keys are the bands, and values are their paths
     
     #Adding directories for ouput. Directories are created and their paths added to the TileInfo object.

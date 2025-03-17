@@ -1,3 +1,27 @@
+# v1.11.0
+## Change
+- download MAJA archives from GEODES instead of THEIA:
+  - rename `theia_download` to `maja_download`: more appropriate
+  - unzip and merge are now done inside `maja_download`, see new args
+  - add arg `upgrade` to check for MAJA version upgrade
+  - add arg `dry_run` in order to print actions without doing them
+  - remove args `login` and `password`: not a good practice
+  - replace arg `empty_zip` by `keep_zip`: zip files are now removed if `keep_zip=False`
+  - zip files are not watched anymore: merged files are idenfied if `merged_scenes.json` is present in the scene directory (issue #25)
+  - add download tests
+  - add function `patch_merged_scenes` in order to patch merged scenes with file `merged_scenes.json`,
+    see documentation for details
+  - arg `wait` is now in minutes (instead of seconds) and cumulative with reries: 
+    5 min. for the 1st retry, 10 min. for the 2nd, 15 min. for the 3rd, ...
+- remove function `delete_empty_zip`
+- dependency constraints:
+  - remove on python version
+  - path >=17
+  - eodag >= 3
+
+## Fix
+- issue #37: only one point extracted in extract_reflectance
+
 # v1.10.1
 ## Add
 - new `theiastac` provider for calibration/validation: extract values from

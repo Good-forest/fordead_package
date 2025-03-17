@@ -254,7 +254,7 @@ def get_last_training_date_dataframe(data_frame, min_last_date_training, max_las
 def compute_HarmonicTerms(DateAsNumber):
     return np.array([1,np.sin(2*np.pi*DateAsNumber/365.25), np.cos(2*np.pi*DateAsNumber/365.25),np.sin(2*2*np.pi*DateAsNumber/365.25),np.cos(2*2*np.pi*DateAsNumber/365.25)])
 
-def model(date_as_number, vi, id_pixel):
+def model(date_as_number, vi):
     harmonic_terms = np.array([[1]*len(date_as_number), np.sin(2*np.pi*np.array(date_as_number)/365.25), np.cos(2*np.pi*np.array(date_as_number)/365.25), np.sin(2*2*np.pi*np.array(date_as_number)/365.25), np.cos(2*2*np.pi*np.array(date_as_number)/365.25)]).T
     p, _, _, _ = lstsq(harmonic_terms, vi)
 
@@ -268,7 +268,7 @@ def model_vi_dataframe(data_frame, name_column):
     data_frame['Date'] = pd.to_datetime(data_frame['Date'])
     data_frame["date_as_number"] = (data_frame['Date'] - pd.to_datetime("2015-01-01")).dt.days
   
-    coeff_vi = data_frame.groupby(["area_name",name_column,"id_pixel"], group_keys=False).apply(lambda x: model(x.date_as_number, x.vi, x.id_pixel)).reset_index()
+    coeff_vi = data_frame.groupby(["area_name",name_column,"id_pixel"]).apply(lambda x: model(x.date_as_number, x.vi), include_groups=False).reset_index()
     
     coeff_vi.columns = ["area_name",name_column,"id_pixel", "coeff"]
     coeff_vi[["coeff1","coeff2","coeff3", "coeff4","coeff5"]] = pd.DataFrame(coeff_vi.coeff.tolist(), index= coeff_vi.index)
@@ -369,7 +369,7 @@ def detect_state_changes(data_frame, name_column):
     first_dates = data_frame.groupby(by = ["area_name", name_column,"id_pixel","group"]).first().reset_index()[["area_name", name_column, "id_pixel","group","Date"]]
     
     dated_changes = changes.merge(first_dates, on=["area_name", name_column, "id_pixel","group"], how='left') #Rajouter la première date du groupe, perdue pendant le goup_by
-    dated_changes["state"] = dated_changes.groupby(["area_name", name_column,"id_pixel"]).apply(get_state).reset_index().rename(columns = {0:"state"}).state
+    dated_changes["state"] = dated_changes.groupby(["area_name", name_column,"id_pixel"]).apply(get_state, include_groups=False).reset_index().rename(columns = {0:"state"}).state
     dated_changes = dated_changes[['area_name', name_column, 'id_pixel','Date','state']].rename(columns = {"Date" : "first_date"})
     
     
@@ -388,9 +388,9 @@ def compute_stress_index(detection_dates, periods, name_column, stress_index_mod
     detection_dates = detection_dates.ffill()
     
     if stress_index_mode == "mean":
-        period_stress_index = detection_dates.groupby(by = ["area_name", name_column,"id_pixel","period_id"]).apply(lambda x : (x.diff_vi.mean())).reset_index(name = "anomaly_intensity")
+        period_stress_index = detection_dates.groupby(by = ["area_name", name_column,"id_pixel","period_id"]).apply(lambda x : (x.diff_vi.mean()), include_groups=False).reset_index(name = "anomaly_intensity")
     elif stress_index_mode == "weighted_mean":
-        period_stress_index = detection_dates.groupby(by = ["area_name", name_column,"id_pixel","period_id"]).apply(lambda x : (x.diff_vi * range(1,len(x)+1)).sum()/(len(x)*(len(x)+1)/2)).reset_index(name = "anomaly_intensity")
+        period_stress_index = detection_dates.groupby(by = ["area_name", name_column,"id_pixel","period_id"]).apply(lambda x : (x.diff_vi * range(1,len(x)+1)).sum()/(len(x)*(len(x)+1)/2), include_groups=False).reset_index(name = "anomaly_intensity")
     else:
         raise Exception("stress_index_mode '" + stress_index_mode + "' not recognised")
     periods = periods.merge(period_stress_index, on=["area_name", name_column,"id_pixel","period_id"], how='left') 

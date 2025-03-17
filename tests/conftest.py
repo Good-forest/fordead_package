@@ -1,4 +1,3 @@
-import pystac
 import pytest
 from path import Path
 import geopandas as gpd

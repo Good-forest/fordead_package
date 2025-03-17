@@ -5,7 +5,7 @@ $condaexe = "${env:userprofile}\Miniforge3-Windows-x86_64.exe"
 $condadir = "${env:userprofile}\miniforge3"
 
 if ( -not (Test-Path -Path $condadir -PathType Container) ){
-    echo "Installing Miniconda in: $condadir"
+    echo "Installing Conda in: $condadir"
     # download miniconda installer
     curl.exe -L -C - $condaurl -o $condaexe
     # install miniconda

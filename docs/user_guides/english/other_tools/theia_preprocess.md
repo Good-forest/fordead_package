@@ -1,80 +1,77 @@
-# Downloading and preprocessing Sentinel-2 data from THEIA
+# Downloading Sentinel-2 data
 
-Though this package is meant to be used with Sentinel-2 data from any provider (Scihub, PEPS or THEIA), it has been mainly used and tested using THEIA data and it provides tools to easily download and preprocess the required data.
-This tool can be used either from a script or from the command line, and automatically downloads all Sentinel-2 data from THEIA between two dates under a cloudiness threshold. Then this data is unzipped, keeping only chosen bands from Flat REflectance data, and zip files can be emptied as a way to save storage space.
-Finally, if two Sentinel-2 directories come from the same acquisition date, they are merged by replacing no data pixels from one directory with pixels with data in the other, before removing the latter directory.
+Though this package is meant to be used with Sentinel-2 data from any provider, it has been mainly used and tested using MAJA data and it provides tools to easily download and preprocess the required data.
 
-The following details the arguments of the python API and CLI. It is possible
-to specify your login and passwords as arguments, although not recommended.
+This tool can be used either from a script or from the command line, and automatically downloads all Sentinel-2 data from GEODES plateform between two dates under a cloudiness threshold. Then this data is unzipped, keeping only chosen bands from Flat REflectance data, and zip files are emptied as a way to save storage space.
 
-Instead of writing your login and password in a script or a command line,
-it is recommended to set theia credentials in the config file `eodag.yaml`
-in the subsection credentials of section theia.
+It can occur that the same Sentinel-2 scene (date & tile) is splitted in two archives when the scene is covered by two granules.
+In that case, the two pieces of raster are merged mosaicing with the average (ignoring no-data) and written in one of the duplicates,
+the others being removed. Still, the empty zip files of the merged scenes are kept in order to keep track of that operation.
 
-In order to find the path of the file `eodag.yml`, run the following
-in a python session, it should create the file if it does not exist:
+## Authentication
+In order to have download access to GEODES plateform, you will
+need to create an account at https://geodes.cnes.fr/ and create
+an API key on that account.
+
+The API key should then be specified in the section `geodes`
+of the EODAG config file "$HOME/.config/eodag/eodag.yaml".
+It should look like this:
+```yaml
+geodes:
+    priority: # Lower value means lower priority (Default: 0)
+    search: # Search parameters configuration
+    auth:
+        credentials:
+            apikey: "write your api key here"
+    download:
+        extract:
+        output_dir:
+```
+
+If $HOME/.config/eodag/eodag.yaml does not exists,
+run the following in a python session, it should create the file:
 ```python
 from path import Path
 from eodag import EODataAccessGateway
+
+# creates the default config file at first call
 EODataAccessGateway()
-print(Path("~").expand() / ".config" / "eodag" / "eodag.yml"))
+
+# prints the path to the default config file, makes sure it exists
+config_file = Path("~/.config/eodag/eodag.yml").expand()
+print(config_file)
+assert config_file.exists()
 ```
 
-In the case there are special characters in your
-login or password, make sure to add double quotes around them,
-example:
-```yaml
-theia:
-    priority: # Lower value means lower priority (Default: 0)
-    search:   # Search parameters configuration
-    download:
-        extract:
-        outputs_prefix:
-        dl_url_params:
-    auth:
-        credentials:
-            ident: "myemail@inrae.fr"
-            pass: "k5dFE9§~lkjqs"
-```
+If the geodes section does not exist in the config file,
+it must be that the config file template is not up to date
+with EODAG v3+. In order to fix it, rename the file
+"$HOME/.config/eodag/eodag.yaml" to "$HOME/.config/eodag/eodag.yaml.old"
+and create a new with the above code.
 
-
-#### INPUTS
-The input parameters are:
-
-- **zipped_directory**: Path of the directory where theia zip files will be downloaded
-- **unzipped_directory**: Path of the directory where the unzipped files will be stored
-- **tiles** : Name of the tiles to be downloaded (format : T31UFQ)
-- **level** : Product level for reflectance products, can be 'LEVEL1C', 'LEVEL2A' or 'LEVEL3A'
-- **start_date** : start date, fmt('2015-12-22')
-- **end_date** : end date, fmt('2015-12-22')
-- **lim_perc_cloud** : Maximum cloudiness in SENTINEL dates downloaded (%)
-- **bands** : List of bands to extracted (B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12, as well as CLMR2, CLMR2, EDGR1, EDGR2, SATR1, SATR2 for LEVEL2A data, and DTS1, DTS2, FLG1, FLG2, WGT1, WGT2 for LEVEL3A)
-- **correction_type** : Chosen correction type ('SRE' or 'FRE' for LEVEL2A data, 'FRC' for LEVEL3A)
-- **empty_zip** : If True, the zip files are removed after unzipping
-- **login_theia** : Login of your theia account, optional (see notes below)
-- **password_theia** : Password of your theia account, optional (see notes below)
-
-#### OUTPUTS
-In the **unzipped_directory**, a directory is created for each tile, containing a directory for each Sentinel-2 acquisition corresponding to the chosen parameters, containing a file for each chosen band in Flat REflectance.
-In the **zipped_directory**, a zip file for each Sentinel-2 acquisition, empty or not depending on the **empty_zip** parameter.
+If there are special characters in your API key,
+make sure to add double quotes around it.
 
 ## Examples
 ### From a script
 
 ```bash
 from fordead.cli.cli_theia_preprocess import theia_preprocess
-theia_preprocess(zipped_directory = <zipped_directory>, unzipped_directory = <unzipped_directory>, tiles = ["T31UFQ","T31UFP"], login_theia = <login_theia>, password_theia = <password_theia>, level = "LEVEL2A", start_date = "2015-01-01", end_date = "2025-01-01", lim_perc_cloud = 50, bands = ["B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12", "CLMR2"], empty_zip = True)
+theia_preprocess(
+    zipped_directory = <zipped_directory>,
+    unzipped_directory = <unzipped_directory>,
+    tiles = ["T31UFQ","T31UFP"],
+    level = "LEVEL2A",
+    start_date = "2015-01-01",
+    end_date = "2025-01-01",
+    lim_perc_cloud = 50,
+    bands = ["B2", "B3", "B4", "B5", "B6", "B7", "B8", "B8A", "B11", "B12", "CLMR2"])
 ```
 
 ### From the command line
 
 ```bash
-fordead theia_preprocess -i <zipped_directory> -o <unzipped_directory> -t T31UFQ -t T31UFP --login_theia <login_theia> --password_theia <password_theia> --level LEVEL2A --start_date 2015-01-01 --end_date 2025-01-01 -n 50 -b B2 -b B3 -b B4 -b B5 -b B6 -b B7 -b B8 -b B8A -b B11 -b B12 -b CLMR2 --empty_zip
+fordead theia_preprocess -i <zipped_directory> -o <unzipped_directory> -t T31UFQ -t T31UFP --level LEVEL2A --start_date 2015-01-01 --end_date 2025-01-01 -n 50 -b B2 -b B3 -b B4 -b B5 -b B6 -b B7 -b B8 -b B8A -b B11 -b B12 -b CLMR2 --dry-run
 ```
 
 See detailed documentation on the [site](https://fordead.gitlab.io/fordead_package/docs/cli/#fordead-theia_preprocess)
-
-## Other ways to download THEIA data
-
-Information about THEIA products can be found on the [THEIA website](https://www.theia-land.fr/), and you can find the catalog [here](https://theia.cnes.fr/atdistrib/rocket/#/search?collection=SENTINEL2).
-You can also use the [theia_download package by Olivier Hagolle](https://github.com/olivierhagolle/theia_download) whose simplified code is used in this tool.

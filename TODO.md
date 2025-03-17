@@ -1,3 +1,5 @@
+# next version
+- [ ] theia_preprocess.maja_download : look at duplicated dates only on unzip.
 # recent
 - [x] split current_state in {current_state and static or timeless} including
   model coeffs
@@ -8,10 +10,10 @@
 - add by_chunk in command lines (extract_reflectance, step5)
 - place all test and example data (fordead_data, outputs) in a data directory to
   simplify `.gitignore` and cleaning
-
-# Wainting for
-- solution to issue https://github.com/microsoft/vscode-python-debugger/issues/498
-  to remove constraint on python version
+- [x] issue in tests calling `points.to_file(Path(...))` only on Windows: 
+  rasing `TypeError: Expected unicode, got Path`
+  seems to be due to a direct call to cython function expecting ctype str
+- [x] remove constraint on python version as a workaround was found to issue https://github.com/microsoft/vscode-python-debugger/issues/498
 
 # Tester la construction de la collection sur un gros jeu de données (1000 images)
 
