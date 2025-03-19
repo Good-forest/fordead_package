@@ -16,6 +16,7 @@ import rasterio
 import re
 import tempfile
 import time
+import warnings
 from zipfile import ZipFile, BadZipfile
 import zipfile
 
@@ -64,9 +65,7 @@ def get_local_maja_files(unzip_dir):
 
     # identify duplicates
     df["merged"] = df["date"].duplicated(keep=False)
-    merged_id = df.loc[df["merged"] & df["unzip_file"].notna(), ["id", "date"]]
-    merged_id.rename(columns={"id":"merged_id"}, inplace=True)
-    df = df.merge(merged_id, how="left", on="date")
+
 
     return df
 
@@ -367,6 +366,8 @@ def maja_download(
 
     if len(df_download) == 0:
         print("Already up-to-date: nothing to download.")
+        if not dry_run:
+            merge_same_date(bands, df, correction_type=correction_type)
         return [], []
 
     unzipped = df[df["status"]=="up-to-date"]
@@ -428,11 +429,12 @@ def maja_download(
                 # extract zip file
                 tmpunzip_file = s2_unzip(zip_file, tmpdir, bands, correction_type)
                 unzip_file = tmpunzip_file.move(unzip_dir / Path(tmpunzip_file).name)
+                df.loc[df.id==r.id, "unzip_file"] = unzip_file
 
             downloaded.append(unzip_file)
             unzipped.append(unzip_file)
         # TODO merge only the results of search
-        merge_same_date(bands, unzip_dir, correction_type=correction_type)
+        merge_same_date(bands, df, correction_type=correction_type)
     
     return downloaded, unzipped
 
@@ -600,7 +602,7 @@ def delete_empty_zip(zipped_dir, unzipped_dir):
                     print("Bad zip file, removing file: {}".format(tile.paths["zipped"][date]))
                     Path(tile.paths["zipped"][date]).remove()
 
-def merge_same_date(bands, out_dir, correction_type):
+def merge_same_date(bands, df, correction_type):
     """
     Merges data from two theia directories if they share the same date of acquisition
 
@@ -608,90 +610,97 @@ def merge_same_date(bands, out_dir, correction_type):
     ----------
     bands : list of str
         List of bands to extracted (B2, B3, B4, B5, B6, B7, B8, B8A, B11, B12, CLMR2).
-    out_dir : str
-        Directory where unzipped data containing theia data are stored.
+    df : pandas.DataFrame
+        Dataframe containing theia data, as returned by get_theia_data
+    correction_type : str
+        Chosen correction type (SRE or FRE for LEVEL2A data, FRC for LEVEL3A)
 
     Returns
     -------
     None.
 
     """
-
     if not all([b.startswith("B") or b.startswith("CLMR") for b in bands]):
         raise NotImplementedError("Only bands Bxx and CLMR[1-2] are supported for merge.")
+    
+    # check that is has been merged with the correct order
+    df = df.loc[df.duplicated("date", keep=False)]
+    df = df.sort_values(by="id").sort_values(by="version_remote", ascending=False).reset_index(drop=True)
+    for group in df.groupby(by="date"):
+        if group[1].unzip_file.isnull().iloc[0]:
+            warnings.warn("Duplicates not correctly merged at date : " + group[0]+"\n"+"\n".join(group[1].unzip_file.tolist()))
 
-    out_dir = Path(out_dir).expand()
-    SenPathGen = out_dir.glob("SEN*")
-    # SenPathList=glob(out_dir+"/SEN*")
-    SenDateList = [] #Création dictionnaire avec date : chemin du fichier
-    SenPathList = []
-    for SenPath in SenPathGen:
-        # SenDate = SenPath.split('_')[1].split('-')[0]
-        SenDate = retrieve_date_from_string(SenPath)
-        SenDateList+=[SenDate]
-        SenPathList += [SenPath]
-    # tile = TileInfo(out_dir)
-    # tile.getdict_datepaths("SENTINEL",tile.data_directory)
+    # subset duplicates not merged
+    df = df.loc[~df.unzip_file.isnull()]
+    df = df.loc[df.duplicated("date", keep=False)]
+    df = df.sort_values(by="id").sort_values(by="version_remote", ascending=False).reset_index(drop=True)
 
+    if len(df) == 0:
+        return
+    
     merged_file_name = "merged_scenes.json"
-    for date in np.unique(np.array(SenDateList)):
-        if np.sum(np.array(SenDateList)==date)>1:
-            print("Duplicates detected at date : " + date)
-            Doublons=np.array(SenPathList)[np.array(SenDateList)==date]
-            Doublons = [Path(f) for f in Doublons]
-            Doublons.sort()
-            # check if already merged
-            for doublon in Doublons:
-                if (doublon / merged_file_name).exists():
-                    raise Exception("Duplicate "+doublon.name+" already merged.")
 
-            with tempfile.TemporaryDirectory(dir=out_dir) as tempdir:
-                tmpdir = Path(tempdir)
+    for group in df.groupby(by="date"):
+        print("Duplicates detected at date : " + group[0])
+        duplicates = list(group[1].unzip_file.values)
+        print('\n'.join(duplicates))
 
-                # mosaic bands of the same date
-                corr_band = theia_bands(correction_type)
-                for band in bands:
-                    print("Mosaicing band : " + band)
-                    for i, doublon in enumerate(Doublons):
-                        if band.startswith("CLMR"):
-                            filename = Path("MASKS") / (doublon.name + corr_band[band])
-                            band_path = doublon / filename
-                            na_value=0
-                        elif band.startswith("B"):
-                            filename= doublon.name + corr_band[band]
-                            band_path = doublon / filename
-                            na_value=-10000
-                        else:
-                            raise NotImplementedError("Merge not implemented for band " + band)
+        out_dir = Path(duplicates[0]).parent
 
+        # check if already merged
+        for doublon in duplicates:
+            if (doublon / merged_file_name).exists():
+                raise Exception("Duplicate "+doublon.name+" already merged.")
+
+        # merge bands
+        with tempfile.TemporaryDirectory(dir=out_dir) as tempdir:
+            tmpdir = Path(tempdir)
+
+            # mosaic bands of the same date
+            corr_band = theia_bands(correction_type)
+            for band in bands:
+                print("Mosaicing band : " + band)
+                for i, doublon in enumerate(duplicates):
+                    if band.startswith("CLMR"):
+                        filename = Path("MASKS") / (doublon.name + corr_band[band])
+                        band_path = doublon / filename
+                        na_value=0
+                    elif band.startswith("B"):
+                        filename= doublon.name + corr_band[band]
+                        band_path = doublon / filename
+                        na_value=-10000
+                    else:
+                        raise NotImplementedError("Merge not implemented for band " + band)
+
+                    if i==0:
+                        output_filename = filename
+                        output_dir = doublon
+                        tmp_path = tmpdir / output_filename
+                        tmp_path.parent.mkdir_p()
+
+                    
+                    with rasterio.open(band_path) as RasterBand:
                         if i==0:
-                            output_filename = filename
-                            output_dir = doublon
-                            tmp_path = tmpdir / output_filename
-                            tmp_path.parent.mkdir_p()
+                            merged_band=RasterBand.read(1)
+                            profile=RasterBand.profile
+                        else:
+                            added_band=RasterBand.read(1)
+                            merged_band[added_band!=na_value]=added_band[added_band!=na_value]
+                
+                with rasterio.open(tmp_path, 'w', **profile) as dst:
+                    dst.write(merged_band,indexes=1)
+            
+            # add a file that specifies the scene was merged with others
+            with open(tmpdir / merged_file_name, "w") as f:
+                json.dump({output_dir.name:[d.name for d in duplicates]},f, indent=4)
+                
+            # remove merged scenes
+            for doublon in duplicates:
+                doublon.rmtree()
+            
+            # move merged scene to original directory
+            tmpdir.move(output_dir)
 
-                        
-                        with rasterio.open(band_path) as RasterBand:
-                            if i==0:
-                                merged_band=RasterBand.read(1)
-                                profile=RasterBand.profile
-                            else:
-                                added_band=RasterBand.read(1)
-                                merged_band[added_band!=na_value]=added_band[added_band!=na_value]
-                    
-                    with rasterio.open(tmp_path, 'w', **profile) as dst:
-                        dst.write(merged_band,indexes=1)
-                
-                # add a file that specifies the scene was merged with others
-                with open(tmpdir / merged_file_name, "w") as f:
-                    json.dump({output_dir.name:[d.name for d in Doublons]},f, indent=4)
-                    
-                # remove merged scenes
-                for doublon in Doublons:
-                    doublon.rmtree()
-                
-                # move merged scene to original directory
-                tmpdir.move(output_dir)
 
 def patch_merged_scenes(zip_dir, unzip_dir, dry_run=True):
     """
