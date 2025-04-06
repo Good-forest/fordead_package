@@ -49,6 +49,7 @@ def export_results(
     multiple_files = False,
     conf_threshold_list = None,
     conf_classes_list = None,
+    overwrite = False
     ):
     """
     Writes results in the chosen period, form and using chosen frequency.
@@ -80,7 +81,7 @@ def export_results(
     tile = tile.import_info()
     dieback_data = import_dieback_data(tile.paths, chunks= None)
     tile.add_parameters({"start_date" : start_date,"end_date" : end_date, "frequency" : frequency, "multiple_files" : multiple_files, "conf_threshold_list": conf_threshold_list, "conf_classes_list" : conf_classes_list})
-    if tile.parameters["Overwrite"] : 
+    if tile.parameters["Overwrite"] or overwrite:
         tile.delete_dirs("periodic_results_dieback","result_files") #Deleting previous detection results if they exist
         tile.delete_attributes("last_date_export")
         
