@@ -207,15 +207,8 @@ def compute_masked_vegetationindex(
                 "stack_bands" : stack_bands
             }
 
-        mask_list = [
-            (tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"])
-            for date_index, date in enumerate(tile.dates) if date in new_dates
-        ]
-
-        # Create a pool of workers
-        print(f" cpu count : {multiprocessing.cpu_count()}")
-        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-            list(tqdm(pool.imap(process_mask_wrapper, mask_list), total=len(mask_list), disable=not progress))
+        for date_index, date in enumerate(tile.dates):
+            process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]))
 
         if soil_detection:
             #Writing soil data 
