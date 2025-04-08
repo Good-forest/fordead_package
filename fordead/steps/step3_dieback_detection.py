@@ -21,11 +21,11 @@ def process_one(tile, first_detection_date_index, coeff_model, date_index, date,
 
     write_tif(anomalies, first_detection_date_index.attrs, tile.paths["AnomaliesDir"] / str("Anomalies_" + date + ".tif"),nodata=0)
     # del vegetation_index, mask, predicted_vi, anomalies, diff_vi
-    return date, (anomalies, diff_vi, mask)
 
     # dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index)
-
+    #
     # if stress_index_mode is not None: stress_data = save_stress(stress_data, dieback_data, changing_pixels, diff_vi, mask, stress_index_mode)
+    return date, (anomalies, diff_vi, mask)
 
     # del vegetation_index, mask, predicted_vi, anomalies, changing_pixels, diff_vi
     # return dieback_data, stress_data
