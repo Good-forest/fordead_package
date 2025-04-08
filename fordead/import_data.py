@@ -643,12 +643,18 @@ def import_resampled_sen_stack(band_paths, list_bands, interpolation_order = 0, 
 
     """
     #Importing data from files
-    
+    # Add XL 
+    # tests option mask_and_scale=True to rioxarray.open_rasterio so the nodata metadata is written to the encoding attribute
+    # if extent is None:
+    #     stack_bands = [rioxarray.open_rasterio(band_paths[band], mask_and_scale=True) for band in list_bands]
+    # else:
+    #     stack_bands = [rioxarray.open_rasterio(band_paths[band],chunks = 1280, mask_and_scale=True).loc[dict(x=slice(extent[0]-20, extent[2]+20),y = slice(extent[3]+20,extent[1]-20))].compute() for band in list_bands]
     
     if extent is None:
         stack_bands = [rioxarray.open_rasterio(band_paths[band]) for band in list_bands]
     else:
         stack_bands = [rioxarray.open_rasterio(band_paths[band],chunks = 1280).loc[dict(x=slice(extent[0]-20, extent[2]+20),y = slice(extent[3]+20,extent[1]-20))].compute() for band in list_bands]
+    
     crs = stack_bands[0].rio.crs
     #Resampling at 10m resolution
     for band_index in range(len(stack_bands)):
@@ -724,10 +730,7 @@ def import_stackedmaskedVI(tuile,min_date = None, max_date=None,chunks = None):
         dates = [date for date in tuile.paths["VegetationIndex"] if date <= max_date]
     else:
         dates = [date for date in tuile.paths["VegetationIndex"]if date >= min_date & date <= max_date]
-        
-        
-        
-# =============================================================================
+
     list_vi=[xr.open_dataset(tuile.paths["VegetationIndex"][date], chunks = chunks, engine = "rasterio") for date in dates]
     stack_vi=xr.concat(list_vi,dim="Time")
     stack_vi=stack_vi.assign_coords(Time=dates)
@@ -740,9 +743,7 @@ def import_stackedmaskedVI(tuile,min_date = None, max_date=None,chunks = None):
     # stack_masks=stack_masks.squeeze("band")
     # stack_masks=stack_masks.chunk({"Time": -1,"x" : chunks,"y" : chunks})
 
-
-# =============================================================================
-#Original rioxarray.open_rasterio
+    #Original rioxarray.open_rasterio
     # list_vi=[rioxarray.open_rasterio(tuile.paths["VegetationIndex"][date],chunks =chunks) for date in dates]
     # stack_vi=xr.concat(list_vi,dim="Time")
     # stack_vi=stack_vi.assign_coords(Time=dates)
@@ -755,10 +756,7 @@ def import_stackedmaskedVI(tuile,min_date = None, max_date=None,chunks = None):
     stack_masks=stack_masks.squeeze("band")
     stack_masks=stack_masks.chunk({"Time": -1,"x" : chunks,"y" : chunks})
 
-# =============================================================================
-# 
-# =============================================================================
-#xr.open_mfdataset
+    #xr.open_mfdataset
     # stack_vi = xr.open_mfdataset([tuile.paths["VegetationIndex"][date] for date in dates],concat_dim = "Time",combine = "nested", chunks = chunks)
     # stack_vi=stack_vi.assign_coords(Time=dates)
     # stack_vi=stack_vi.chunk({"Time": -1,"x" : chunks,"y" : chunks})    
@@ -768,7 +766,12 @@ def import_stackedmaskedVI(tuile,min_date = None, max_date=None,chunks = None):
     # stack_masks=stack_masks.squeeze("band")
     # stack_masks=stack_masks.chunk({"Time": -1,"x" : chunks,"y" : chunks})
 
-    return stack_vi["Band1"], stack_masks #stack_masks["band_data"]
+    # original
+    #return stack_vi["Band1"], stack_masks #stack_masks["band_data"]
+    # add XL
+    # stack_vi["band_data"] if written with write_tif instead of stack_vi["Band1"]
+    # list(stack_vi.data_vars)[0] to get the name of the first variable (supposed to be the only one)
+    return stack_vi[list(stack_vi.data_vars)[0]], stack_masks
 
     
 def import_coeff_model(path, chunks = None):
@@ -1065,7 +1068,10 @@ def import_masked_vi(dict_paths, date, chunks = None):
     """
     
     # vegetation_index = rioxarray.open_rasterio(dict_paths["VegetationIndex"][date],chunks = chunks)
-    vegetation_index = xr.open_dataset(dict_paths["VegetationIndex"][date],chunks = chunks, engine = "rasterio")['Band1']
+    # Add XL
+    #vegetation_index = xr.open_dataset(dict_paths["VegetationIndex"][date],chunks = chunks, engine = "rasterio")['Band1']
+    vi_dataset = xr.open_dataset(dict_paths["VegetationIndex"][date],chunks = chunks, engine = "rasterio")
+    vegetation_index = vi_dataset[list(vi_dataset.data_vars)[0]]
     mask=rioxarray.open_rasterio(dict_paths["Masks"][date],chunks = chunks).astype(bool)
     
     # masked_vi=xr.Dataset({"vegetation_index": vegetation_index,

@@ -20,17 +20,24 @@ from scipy import ndimage
 import json
 from fordead.import_data import import_stress_index, import_coeff_model, import_dieback_data, import_masked_vi, import_first_detection_date_index, TileInfo, import_binary_raster, import_soil_data,import_resampled_sen_stack, import_stress_data
 
-def write_raster(data_array, path, compress_vi):
-        
-    # dem = data_array.to_dataset(name="dem")
-    # encoding = {"dem": {'zlib': True, "dtype" : "int16", "scale_factor" : 0.001, "_FillValue" : 0}}
-    # dem.to_netcdf(path, encoding=encoding)
+def write_raster(data_array, path, compress_vi=False):      
+    # if compress_vi:
+    #     data_array.encoding["dtype"]="int16"
+    #     data_array.encoding["scale_factor"]=0.001
+    #     data_array.encoding["_FillValue"]=-1
+    # data_array.rio.to_raster(path, windowed = False, tiled = True)
+
+    # Modif XL
     if compress_vi:
         data_array.encoding["dtype"]="int16"
         data_array.encoding["scale_factor"]=0.001
         data_array.encoding["_FillValue"]=-1
-    
-    data_array.rio.to_raster(path, windowed = False, tiled = True)
+    # netcdf format does not support option tiled
+    if str(path).endswith(".nc"):
+        data_array.rio.to_raster(path, windowed = False, tiled = False)
+    else:
+        data_array.rio.to_raster(path, windowed = False, tiled = True)
+
 
 def write_tif(data_array, attributes, path, nodata = None):
     """
@@ -52,7 +59,6 @@ def write_tif(data_array, attributes, path, nodata = None):
     None.
 
     """
-
         
     data_array.attrs=attributes
     # data_array.rio.crs=data_array.crs.replace("+init=","") #Remove "+init=" which it deprecated
@@ -76,7 +82,9 @@ def write_tif(data_array, attributes, path, nodata = None):
     # data_array.attrs["scales"]=(0,)
     # data_array.attrs["offsets"]=(0,)
 
-    data_array.rio.to_raster(path,windowed = False, **args, tiled = True)
+    #data_array.rio.to_raster(path,windowed = False, **args, tiled = True)
+    # Add XL - compression mode 'zstd', works better then 'LZW' for large rasters
+    data_array.rio.to_raster(path,windowed = False, **args, tiled = True, compress='zstd')
 
 
 
@@ -227,13 +235,18 @@ def get_state_at_date(state_code,relevant_area,attrs):
     geoms = list(
                 {'properties': {'state': v}, 'geometry': s}
                 for i, (s, v) 
+                # in enumerate(
+                #     rasterio.features.shapes(state_code.astype("uint8"), mask =  np.logical_and(relevant_area.data,state_code!=0).compute(), transform=Affine(*attrs["transform"]))))
+
+                ## modif XL : dans attrs (dieback_data.stat.attrs) il n'y a pas de transform et pas de crs
                 in enumerate(
-                    rasterio.features.shapes(state_code.astype("uint8"), mask =  np.logical_and(relevant_area.data,state_code!=0).compute(), transform=Affine(*attrs["transform"]))))
+                    rasterio.features.shapes(state_code.astype("uint8"), mask =  (relevant_area & (state_code!=0)).compute().data, transform=relevant_area.rio.transform()))) # # Affine(*attrs["transform"])
+
     period_end_results = gp.GeoDataFrame.from_features(geoms)
-    
     period_end_results = period_end_results.replace([1, 2, 3], ["Anomaly","Bare ground","Bare ground after anomaly"])
-    
-    period_end_results.crs = attrs["crs"].replace("+init=","")
+
+    #period_end_results.crs = attrs["crs"].replace("+init=","")
+    #period_end_results.crs = relevant_area.rio.crs #attrs["crs"].replace("+init=","")
     return period_end_results
 
 def vectorizing_confidence_class(confidence_index, nb_dates, relevant_area, bins_classes, classes, attrs):

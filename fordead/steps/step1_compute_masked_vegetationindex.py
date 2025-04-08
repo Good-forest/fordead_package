@@ -4,6 +4,8 @@
 #   LIBRARIES
 # =============================================================================
 
+# %%
+
 # import time
 import click
 from pathlib import Path
@@ -81,18 +83,11 @@ def process_one(tile, date, date_index, soil_data, interpolation_order, sentinel
     if apply_source_mask:
         mask = mask | get_source_mask(tile.paths["Sentinel"][date], sentinel_source, extent = tile.raster_meta["extent"]) #Masking with source mask if option chosen
 
-    #Writing vegetation index and mask
-    # write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"),nodata=0)
+    write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
     write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
-    write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
-    # write_raster(mask, tile.paths["MaskDir"] / ("Mask_"+date+".nc"))
 
     del vegetation_index, mask
-    # print('\r', date, " | ", len(tile.dates)-date_index-1, " remaining       ", sep='', end='', flush=True) if date_index != (len(tile.dates) -1) else print('\r', '                                              ', '\r', sep='', end='', flush=True)
-    
     return date, result_soil_data
-
-
 
 
 def compute_masked_vegetationindex(
@@ -110,7 +105,7 @@ def compute_masked_vegetationindex(
     ignored_period = None,
     extent_shape_path=None,
     path_dict_vi = None,
-    progress=True
+    progress=True,
     ):
     """
     Computes masks and masked vegetation index for each SENTINEL date under a cloudiness threshold.

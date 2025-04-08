@@ -387,9 +387,13 @@ def extract_points(x, df, **kwargs):
     points = x.sel(coords.to_xarray(), **kwargs)
     return points
 
+# add XL
 def extract_raster_values(
         tile_coll, points, bands_to_extract=None, extracted_reflectance=None,
         export_path=None, chunksize=512, by_chunk=True, dropna=True, dtype=int):
+# def extract_raster_values(
+#         tile_coll, points, dates, bands_to_extract=None, extracted_reflectance=None,
+#         export_path=None, chunksize=512, by_chunk=True, dropna=True, dtype=int):
     """
     Sample raster values for each XY points
 
@@ -401,6 +405,7 @@ def extract_raster_values(
         Observation points
     bands_to_extract : list of strings
         List of bands to extract. If None, all bands are extracted.
+    dates : list of strings of dates on which to extract the values
     extracted_reflectance: pandas.DataFrame
         Table of already sampled raster values, not to extract again.
         Expected columns are "area_name", "Date" and an ID columns to merge with points dataframe.
@@ -439,20 +444,25 @@ def extract_raster_values(
         arr = tile_coll
     else:
         raise ValueError("tile_coll must be an ItemCollection or an xarray.DataArray")
-    
+
+    # add XL
+    # filter xarray.DataArray with the selection of dates
+    #arr = arr[arr['id'].isin(dates)]
+
     if not isinstance(points, gp.GeoDataFrame):
         raise ValueError("points must be a GeoDataFrame")
 
     if not points.crs.equals(arr.rio.crs):
         points = points.to_crs(arr.rio.crs)
     
-    # keep only points inside array bounding box
-    bbox = gpd.GeoSeries(box(*arr.rio.bounds()), crs=arr.rio.crs)
-    # makes a copy of points by the way
-    points = points.loc[points.intersects(bbox)]
-    if len(points) == 0:
-        print("No points inside array bounding box.")
-        return
+    # Add XL - pb with intersection, did not find points - commented    
+    # # keep only points inside array bounding box
+    # bbox = gpd.GeoSeries(box(*arr.rio.bounds()), crs=arr.rio.crs)
+    # # makes a copy of points by the way
+    # points = points.loc[points.intersects(bbox)]
+    # if len(points) == 0:
+    #     print("No points inside array bounding box.")
+    #     return
 
 
     if by_chunk:
@@ -473,6 +483,7 @@ def extract_raster_values(
         points.sort_values(by=["chunk_x", "chunk_y"], inplace=True)
         res_list = []
         gpoints = points.groupby(by=["chunk_x", "chunk_y"])
+
         print(f"Extracting {points.shape[0]} points in {len(gpoints)} xy chunks within date range {daterange} ({len(arr.time)} dates)...")
         for i, group in enumerate(gpoints):
             start = time()
