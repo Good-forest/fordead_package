@@ -29,6 +29,9 @@ from fordead.writing_data import write_raster, write_tif
 def process_one_wrapper(args):
     return process_one(*args)
 
+def process_mask_wrapper(args):
+    return process_mask(*args)
+
 def process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values):
     if soil_detection:
         mask = compute_masks(stack_bands, soil_data, date_index)
@@ -49,12 +52,12 @@ def process_one(tile, date, date_index, interpolation_order, compress_raster, co
     invalid_values = vegetation_index.isnull() | np.isinf(vegetation_index)
     vegetation_index = vegetation_index.where(~invalid_values,0)
 
-    return { date : invalid_values}
     if compress_raster:
         write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
     else:
         write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
     del vegetation_index
+    return { date : (stack_bands, invalid_values) }
     # process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values)
 
 
@@ -195,31 +198,25 @@ def compute_masked_vegetationindex(
         print(f" cpu count : {multiprocessing.cpu_count()}")
         with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
             invalid_values = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
-        return
-        # with multiprocessing.Pool() as pool:
-        #     invalid_values = tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress)
-        # for k, value in enumerate(invalid_values):
-        #     print(k, value)
+        mask_values = {}
+        for invalid_value in invalid_values:
+            date = list(invalid_value.keys())[0]
+            stack_bands = invalid_value[date][0]
+            mask_values[date] = {
+                "invalid_values" : invalid_value[date][1],
+                "stack_bands" : stack_bands
+            }
 
+        mask_list = [
+            (tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"])
+            for date_index, date in enumerate(tile.dates) if date in new_dates
+        ]
 
+        # Create a pool of workers
+        print(f" cpu count : {multiprocessing.cpu_count()}")
+        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+            list(tqdm(pool.imap(process_mask_wrapper, mask_list), total=len(mask_list), disable=not progress))
 
-
-
-
-        # masks_list = [
-                
-        # 
-        # # Merge soil_data results from all parallel processes if soil detection is enabled
-        # if soil_detection:
-        #     # Sort results by date to ensure proper ordering of soil detection
-        #     results.sort(key=lambda x: x[0])
-        #     
-        #     # Merge the soil_data results in the correct order
-        #     for date, result_soil_data in results:
-        #         if result_soil_data is not None:
-        #             for key in soil_data.keys():
-        #                 soil_data[key] = result_soil_data[key]
-                        
         if soil_detection:
             #Writing soil data 
             write_tif(soil_data["state"], tile.raster_meta["attrs"],tile.paths["state_soil"],nodata=0)
