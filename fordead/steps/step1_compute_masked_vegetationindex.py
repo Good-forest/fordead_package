@@ -26,41 +26,10 @@ from fordead.writing_data import write_raster, write_tif
 #%% =============================================================================
 #   FONCTIONS
 # =============================================================================
-
-@click.command(name='masked_vi')
-@click.option("-i", "--input_directory", type = str, help = "Path of the directory with Sentinel dates")
-@click.option("-o", "--data_directory", type = str, help = "Path of the output directory")
-@click.option("-s", "--start_date", type = str,default = "2015-01-01", help = "First date of processing, dates before this date will be ignored.", show_default=True)
-@click.option("-n", "--lim_perc_cloud", type = float,default = 0.4, help = "Maximum cloudiness at the tile scale, used to filter used SENTINEL dates. Set parameter as -1 to not filter based on cloudiness", show_default=True)
-@click.option("--interpolation_order", type = int,default = 0, help ="interpolation order for bands at 20m resolution : 0 = nearest neighbour, 1 = linear, 2 = bilinéaire, 3 = cubique", show_default=True)
-@click.option("--sentinel_source", type = str,default = "theia", help = "Source of data, can be 'theia' et 'scihub' et 'peps'", show_default=True)
-@click.option("--apply_source_mask",  is_flag=True, help = "If True, applies the mask from SENTINEL-data supplier", show_default=True)
-@click.option("--soil_detection",  is_flag=True, help = "If True, bare ground is detected and used as mask, but the process has not been tested on other data than THEIA data in France (see https://fordead.gitlab.io/fordead_package/docs/user_guides/english/01_compute_masked_vegetationindex/). If False, mask from formula_mask is applied.", show_default=True)
-@click.option("--formula_mask", type = str,default = "(B2 >= 700)", help = "formula whose result would be binary, as described here https://fordead.gitlab.io/fordead_package/reference/fordead/masking_vi/#compute_vegetation_index. Is only used if soil_detection is False.", show_default=True)
-@click.option("--vi", type = str,default = "CRSWIR", help = "Chosen vegetation index", show_default=True)
-@click.option("--compress_vi",  is_flag=True, help = "Stores the vegetation index as low-resolution floating-point data as small integers in a netCDF file. Uses less disk space but can lead to very small difference in results as the vegetation is rounded to three decimal places", show_default=True)
-@click.option("--ignored_period", multiple=True, type = str, default = None, help = "Period whose Sentinel dates to ignore (format 'MM-DD', ex : --ignored_period 11-01 --ignored_period 05-01", show_default=True)
-@click.option("--extent_shape_path", type = str,default = None, help = "Path of shapefile used as extent of detection, if None, the whole tile is used", show_default=True)
-@click.option("--path_dict_vi", type = str,default = None, help = "Path of text file to add vegetation index formula, if None, only built-in vegetation indices can be used (CRSWIR, NDVI)", show_default=True)
-def cli_compute_masked_vegetationindex(**kwargs):
-    """
-    Computes masks and masked vegetation index for each SENTINEL date under a cloudiness threshold.
-    The mask includes pixels ouside satellite swath, some shadows, and the mask from SENTINEL data provider if the option is chosen.
-    Also, if soil detection is activated, the mask includes bare ground detection and cloud detection, but the process might only be adapted to THEIA data in France's coniferous forests.
-    If it is not activated, then the user can choose a mask of his own using the formula_mask parameter.
-    Results are written in the chosen directory.
-    See details here : https://fordead.gitlab.io/fordead_package/docs/user_guides/english/01_compute_masked_vegetationindex/
-    \f
-
-    """
-    empty_to_none(kwargs, "ignored_period")
-    compute_masked_vegetationindex(**kwargs)
-
-
 def process_one_wrapper(args):
     return process_one(*args)
 
-def process_one(tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster):
+def process_one(tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi=False):
     # Resample and import SENTINEL data
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
 
@@ -69,7 +38,12 @@ def process_one(tile, date, date_index, soil_data, interpolation_order, sentinel
     invalid_values = vegetation_index.isnull() | np.isinf(vegetation_index)
     vegetation_index = vegetation_index.where(~invalid_values,0)
 
-    # Compute mask
+    if compress_raster:
+        write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
+    else:
+        write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
+
+
     if soil_detection:
         mask = compute_masks(stack_bands, soil_data, date_index)
     else:
@@ -79,12 +53,6 @@ def process_one(tile, date, date_index, soil_data, interpolation_order, sentinel
     if apply_source_mask:
         mask = mask | get_source_mask(tile.paths["Sentinel"][date], sentinel_source, extent = tile.raster_meta["extent"]) #Masking with source mask if option chosen
 
-    if compress_raster:
-        write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
-    else:
-        write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
-
-    write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
     write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
 
     del vegetation_index, mask
