@@ -1,13 +1,21 @@
-# -*- coding: utf-8 -*-
-
-import click
 from tqdm import tqdm
+import multiprocessing
+
 from fordead.import_data import import_coeff_model, import_dieback_data, import_stress_data, initialize_dieback_data, initialize_stress_data, import_masked_vi, import_first_detection_date_index, TileInfo, import_binary_raster
 from fordead.writing_data import write_tif
 from fordead.dieback_detection import detection_anomalies, detection_dieback, save_stress
 from fordead.model_vegetation_index import prediction_vegetation_index, correct_vi_date
 
-def process_one(tile, first_detection_date_index, coeff_model, date_index, date, dieback_data, stress_data, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_index_mode):
+def process_dieback_wrapper(args): return process_dieback(*args)
+
+def process_dieback(anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode):
+    dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index)
+    if stress_index_mode is not None: stress_data = save_stress(stress_data, dieback_data, changing_pixels, diff_vi, mask, stress_index_mode)
+    return dieback_data, stress_data
+
+def process_one_wrapper(args): return process_one(*args)
+
+def process_one(tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi):
     vegetation_index, mask = import_masked_vi(tile.paths,date)
     if tile.parameters["correct_vi"]:
         vegetation_index, tile.correction_vi = correct_vi_date(vegetation_index, mask,forest_mask, tile.large_scale_model, date, tile.correction_vi)
@@ -20,15 +28,7 @@ def process_one(tile, first_detection_date_index, coeff_model, date_index, date,
                                              vi = vi, path_dict_vi = path_dict_vi)
 
     write_tif(anomalies, first_detection_date_index.attrs, tile.paths["AnomaliesDir"] / str("Anomalies_" + date + ".tif"),nodata=0)
-    # del vegetation_index, mask, predicted_vi, anomalies, diff_vi
-
-    # dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index)
-    #
-    # if stress_index_mode is not None: stress_data = save_stress(stress_data, dieback_data, changing_pixels, diff_vi, mask, stress_index_mode)
     return date, (anomalies, diff_vi, mask)
-
-    # del vegetation_index, mask, predicted_vi, anomalies, changing_pixels, diff_vi
-    # return dieback_data, stress_data
 
 
 
@@ -124,17 +124,33 @@ def dieback_detection(
         if tile.parameters["correct_vi"]:
             forest_mask = import_binary_raster(tile.paths["forest_mask"])
             
-        #dieback DETECTION
-        for date_index, date in tqdm(enumerate(tile.dates), total=len(tile.dates), disable=not progress):
-            if not date in new_dates: continue
-            r = process_one(tile, first_detection_date_index, coeff_model, date_index, date, dieback_data, stress_data, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_index_mode)
+
+        args_list = [
+            (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi)
+            for date_index, date in enumerate(new_dates) if not date in tile.paths["Anomalies"]
+        ]
+
+        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+            dieback_results = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
+
+        dieback_values = {}
+        for date, (anomalies, diff_vi, mask) in dieback_results:
+            dieback_values[date] = {
+                "anomalies": anomalies,
+                "diff_vi": diff_vi,
+                "mask": mask
+            }
+
+        for date_index, date in enumerate(new_dates):
+            dieback_data, stress_data = process_dieback_wrapper((dieback_values[date]["anomalies"], dieback_values[date]["diff_vi"], dieback_values[date]["mask"], date_index, dieback_data, stress_data, stress_index_mode))
+
         tile.last_computed_anomaly = new_dates[-1]
   
-        # write_tif(dieback_data["state"], first_detection_date_index.attrs,tile.paths["state_dieback"],nodata=0)
-        # write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
-        # write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
-        # write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
-        # del dieback_data
+        write_tif(dieback_data["state"], first_detection_date_index.attrs,tile.paths["state_dieback"],nodata=0)
+        write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
+        write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
+        write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
+        del dieback_data
         
         if stress_index_mode is not None:
             # valid_model = import_binary_raster(tile.paths["sufficient_coverage_mask"])

@@ -186,8 +186,6 @@ def compute_masked_vegetationindex(
                 for  date in tile.dates if date in new_dates
             ]
 
-        # Create a pool of workers
-        print(f" cpu count : {multiprocessing.cpu_count()}")
         with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
             vi_results = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
 
