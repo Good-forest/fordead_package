@@ -66,6 +66,7 @@ def compute_masked_vegetationindex(
     formula_mask = "(B2 >= 700)",
     vi = "CRSWIR",
     compress_vi = False,
+    compress_raster = True,
     ignored_period = None,
     extent_shape_path=None,
     path_dict_vi = None,
@@ -101,6 +102,8 @@ def compute_masked_vegetationindex(
         Chosen vegetation index
     compress_vi : bool
         If True, stores the vegetation index as low-resolution floating-point data as small integers in a netCDF file. Uses less disk space but can lead to very small difference in results as the vegetation index is rounded to three decimal places
+    compress_raster : bool
+        If True, compresses the output rasters using the tiff output and stdz algorithm. This can significantly reduce the file size without losing any data. Instead, classical output with netcdf (.nc) format is used.
     ignored_period : list of two strings
         Period whose Sentinel dates to ignore (format 'MM-DD', ex : ["11-01","05-01"])
     extent_shape_path : str
@@ -201,7 +204,10 @@ def compute_masked_vegetationindex(
                 #write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
                 #write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
                 # Add XL
-                write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
+                if compress_raster:
+                    write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
+                else:
+                    write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
                 write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
                 
 

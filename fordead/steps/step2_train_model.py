@@ -103,7 +103,6 @@ def train_model(
                                               min_last_date_training = min_last_date_training,
                                               nb_min_date = nb_min_date)
         
-        
         #Fusion du masque forêt et des zones non utilisables par manque de données
         sufficient_coverage_mask = first_detection_date_index!=0
         
