@@ -45,7 +45,7 @@ def process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source
     write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
 
 
-def process_one(tile, date, date_index, interpolation_order, compress_raster, compress_vi=False):
+def process_one(tile, date, interpolation_order, compress_raster, compress_vi=False):
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
 
     vegetation_index = compute_vegetation_index(stack_bands, formula = tile.vi_formula)
@@ -184,8 +184,8 @@ def compute_masked_vegetationindex(
         tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
 
         args_list = [
-                (tile, date, date_index, interpolation_order, compress_raster, compress_vi)
-                for date_index, date in enumerate(tile.dates) if date in new_dates
+                (tile, date, interpolation_order, compress_raster, compress_vi)
+                for  date in tile.dates if date in new_dates
             ]
 
         # Create a pool of workers
