@@ -176,50 +176,53 @@ def detect_clouds_dataframe(data_frame):
 
 def compute_and_apply_mask(data_frame, soil_detection, formula_mask, list_bands, apply_source_mask, sentinel_source, name_column):
  
+    # Create a thread-safe implementation that doesn't modify the input data_frame
     if soil_detection:
-        data_frame, bare_ground = compute_masks_dataframe(data_frame, list_bands, name_column)
-        # data_frame["bare_ground"] = bare_ground.to_numpy()
+        # compute_masks_dataframe now returns a new DataFrame rather than modifying in-place
+        masked_df, bare_ground = compute_masks_dataframe(data_frame, list_bands, name_column)
     else:
-        data_frame = compute_user_mask_dataframe(data_frame, formula_mask, list_bands)
+        # Make sure compute_user_mask_dataframe returns a new DataFrame
+        masked_df = compute_user_mask_dataframe(data_frame.copy(), formula_mask, list_bands)
         bare_ground = None
-        
-    masked_dataframe = data_frame[~data_frame["mask"]]
+    
+    # Filter the DataFrame instead of modifying it in-place
+    result_df = masked_df[~masked_df["mask"]]
     
     if apply_source_mask:
-        masked_dataframe = masked_dataframe[~source_mask_dataframe(masked_dataframe["Mask"], sentinel_source)]
+        result_df = result_df[~source_mask_dataframe(result_df["Mask"], sentinel_source)]
     
-    return masked_dataframe, bare_ground
+    return result_df, bare_ground
 
 def compute_user_mask_dataframe(data_frame, formula_mask, list_bands):
+    # Create a new DataFrame to avoid modifying the input DataFrame
+    result_df = data_frame.copy()
+    
     shadows = (data_frame[list_bands]==0).any(axis=1)
     outside_swath = data_frame[list_bands[0]]<0
     user_mask = compute_vegetation_index(data_frame, formula = formula_mask)
-    data_frame["mask"] = shadows | outside_swath | user_mask
-    return data_frame
+    
+    # Add the mask to the new DataFrame
+    result_df["mask"] = shadows | outside_swath | user_mask
+    
+    return result_df
 
 def compute_masks_dataframe(data_frame, list_bands, name_column):
     
     data_frame["soil_anomaly"], data_frame["shadows"], data_frame["outside_swath"], data_frame["invalid"] = get_pre_masks_dataframe(data_frame, list_bands, name_column)
     
+    # This function is already thread-safe as it operates on DataFrames which are copied by value
     bare_ground_first_date = detect_soil(data_frame, name_column)
     
-    # soil_data["bare_ground"] = True
-    data_frame = data_frame.merge(bare_ground_first_date, on=["area_name", name_column, "id_pixel"], how='left')
+    # Create a new DataFrame by merging rather than modifying in-place
+    result_df = data_frame.merge(bare_ground_first_date, on=["area_name", name_column, "id_pixel"], how='left')
  
-    data_frame["bare_ground"] = (data_frame["Date"] >= data_frame["bare_ground_first_date"])
-    # data_frame["bare_ground"].sum()
+    result_df["bare_ground"] = (result_df["Date"] >= result_df["bare_ground_first_date"])
     
-    # data_frame["bare_ground"] = data_frame.groupby(["area_name", name_column, "id_pixel"]).bare_ground.ffill().fillna(False)
-
-    data_frame["clouds"] = detect_clouds_dataframe(data_frame)
+    result_df["clouds"] = detect_clouds_dataframe(result_df)
     
-    data_frame["mask"] = data_frame["shadows"] | data_frame["clouds"] | data_frame["outside_swath"] | (~data_frame["bare_ground"] & data_frame["soil_anomaly"])
-    # mask = shadows | clouds | outside_swath | (data_frame["soil_anomaly"]
-
-    # mask = shadows | clouds | outside_swath | data_frame["bare_ground"] | data_frame["soil_anomaly"]
-
+    result_df["mask"] = result_df["shadows"] | result_df["clouds"] | result_df["outside_swath"] | (~result_df["bare_ground"] & result_df["soil_anomaly"])
     
-    return data_frame, bare_ground_first_date
+    return result_df, bare_ground_first_date
   
       
 def filter_cloudy_acquisitions(reflect, cloudiness_path, lim_perc_cloud):

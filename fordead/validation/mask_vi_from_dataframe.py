@@ -107,7 +107,7 @@ def mask_vi_from_dataframe(reflectance_path,
         Period whose Sentinel acquisitions to ignore (format 'MM-DD', ex : ["11-01","05-01"])
     """
     
-
+    # Thread-safe implementation - avoid modifying DataFrame in-place
     reflect = pd.read_csv(reflectance_path)
     
     if cloudiness_path is not None:
@@ -119,22 +119,27 @@ def mask_vi_from_dataframe(reflectance_path,
     
     reflect = reflect.sort_values(by=["area_name",name_column,'id_pixel', 'Date'])
     
-    reflect, first_date_bare_ground = compute_and_apply_mask(reflect, soil_detection, formula_mask, list_bands, apply_source_mask, sentinel_source, name_column)
+    # compute_and_apply_mask is now thread-safe as it returns a new DataFrame
+    filtered_reflect, first_date_bare_ground = compute_and_apply_mask(reflect, soil_detection, formula_mask, list_bands, apply_source_mask, sentinel_source, name_column)
 
-    reflect["vi"] = compute_vegetation_index(reflect, vi = vi, path_dict_vi = path_dict_vi)
-    reflect = reflect[~reflect["vi"].isnull()]
-    reflect = reflect[~np.isinf(reflect["vi"])]
+    # Create a new DataFrame with the vegetation index
+    result_df = filtered_reflect.copy()
+    result_df["vi"] = compute_vegetation_index(filtered_reflect, vi = vi, path_dict_vi = path_dict_vi)
+    result_df = result_df[~result_df["vi"].isnull()]
+    result_df = result_df[~np.isinf(result_df["vi"])]
     
+    # Select only the needed columns
     if soil_detection:
-        reflect = reflect[["epsg", "area_name", name_column, "id_pixel", "Date","vi", "bare_ground"]]
+        result_df = result_df[["epsg", "area_name", name_column, "id_pixel", "Date","vi", "bare_ground"]]
     else:
-        reflect = reflect[["epsg", "area_name", name_column, "id_pixel", "Date","vi"]]
-    # reflect = reflect.drop(columns=list_bands + ["soil_anomaly", "Mask"]) #soil_anomaly shouldn't be added in the first place
+        result_df = result_df[["epsg", "area_name", name_column, "id_pixel", "Date","vi"]]
     
-    mask_vi_periods = get_mask_vi_periods(reflect, first_date_bare_ground, name_column)
+    # Use thread-safe get_mask_vi_periods which returns a new DataFrame
+    mask_vi_periods = get_mask_vi_periods(result_df, first_date_bare_ground, name_column)
     
+    # Write results to files
     mask_vi_periods.to_csv(periods_path, mode='w', index=False,header=True)
-    reflect.to_csv(masked_vi_path, mode='w', index=False,header=True)
+    result_df.to_csv(masked_vi_path, mode='w', index=False,header=True)
 
 
 if __name__ == '__main__':

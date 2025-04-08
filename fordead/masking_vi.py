@@ -361,21 +361,24 @@ def compute_masks(stack_bands, soil_data, date_index):
     -------
     mask : xarray DataArray
         Binary DataArray, holds True where pixels are masked
+    updated_soil_data : xarray DataSet
+        Updated soil data with new soil detections
 
     """
     
     soil_anomaly, shadows, outside_swath, invalid = get_pre_masks(stack_bands)
     
-    # Compute soil
-    soil_data = detect_soil(soil_data, soil_anomaly, invalid, date_index)
+    # Compute soil - create a local copy of soil_data to avoid modifying the input
+    updated_soil_data = {key: soil_data[key].copy() for key in soil_data.keys()}
+    updated_soil_data = detect_soil(updated_soil_data, soil_anomaly, invalid, date_index)
 
     # Compute clouds
-    clouds = detect_clouds(stack_bands, soil_data["state"], soil_anomaly)
+    clouds = detect_clouds(stack_bands, updated_soil_data["state"], soil_anomaly)
     
     #Combine all masks
-    mask = shadows | clouds | outside_swath | soil_data['state'] | soil_anomaly
+    mask = shadows | clouds | outside_swath | updated_soil_data['state'] | soil_anomaly
 
-    return mask
+    return mask, updated_soil_data
 
 def compute_user_mask(stack_bands, formula_mask):
     """

@@ -10,6 +10,9 @@ from pathlib import Path
 # import geopandas as gp
 import numpy as np
 from tqdm import tqdm
+import multiprocessing
+
+import concurrent.futures
 #%% ===========================================================================
 #   IMPORT FORDEAD MODULES 
 # =============================================================================
@@ -50,6 +53,46 @@ def cli_compute_masked_vegetationindex(**kwargs):
     """
     empty_to_none(kwargs, "ignored_period")
     compute_masked_vegetationindex(**kwargs)
+
+
+def process_one_wrapper(args):
+    return process_one(*args)
+
+def process_one(tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_vi):
+    # Resample and import SENTINEL data
+    stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
+
+    # Compute vegetation index
+    vegetation_index = compute_vegetation_index(stack_bands, formula = tile.vi_formula)
+    invalid_values = vegetation_index.isnull() | np.isinf(vegetation_index)
+    vegetation_index = vegetation_index.where(~invalid_values,0)
+
+    # Compute mask
+    if soil_detection:
+        # Use the thread-safe version of compute_masks which returns the updated soil_data
+        mask, updated_soil_data = compute_masks(stack_bands, soil_data, date_index)
+        # Return the updated soil_data to be merged in main process
+        result_soil_data = updated_soil_data
+    else:
+        mask = compute_user_mask(stack_bands, formula_mask)
+        result_soil_data = None
+        
+    mask = mask | invalid_values
+    if apply_source_mask:
+        mask = mask | get_source_mask(tile.paths["Sentinel"][date], sentinel_source, extent = tile.raster_meta["extent"]) #Masking with source mask if option chosen
+
+    #Writing vegetation index and mask
+    # write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"),nodata=0)
+    write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
+    write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
+    # write_raster(mask, tile.paths["MaskDir"] / ("Mask_"+date+".nc"))
+
+    del vegetation_index, mask
+    # print('\r', date, " | ", len(tile.dates)-date_index-1, " remaining       ", sep='', end='', flush=True) if date_index != (len(tile.dates) -1) else print('\r', '                                              ', '\r', sep='', end='', flush=True)
+    
+    return date, result_soil_data
+
+
 
 
 def compute_masked_vegetationindex(
@@ -171,35 +214,33 @@ def compute_masked_vegetationindex(
 
         tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0]) #Selects only relevant bands depending on used vegetation index plus forced_bands used in masks
         
-        for date_index, date in tqdm(enumerate(tile.dates), total=len(tile.dates), disable=not progress):
-            if date in new_dates:
-                
-                # Resample and import SENTINEL data
-                stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
-                
-                # Compute vegetation index
-                vegetation_index = compute_vegetation_index(stack_bands, formula = tile.vi_formula)
-                invalid_values = vegetation_index.isnull() | np.isinf(vegetation_index)
-                vegetation_index = vegetation_index.where(~invalid_values,0)
+        # Sequential processing (original approach)
+        # for date_index, date in tqdm(enumerate(tile.dates), total=len(tile.dates), disable=not progress):
+        #     if date in new_dates:
+        #         process_one(tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_vi)
+        #
+        args_list = [
+                (tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_vi)
+                for date_index, date in enumerate(tile.dates) if date in new_dates
+            ]
 
-                # Compute mask
-                if soil_detection:
-                    mask = compute_masks(stack_bands, soil_data, date_index)
-                else:
-                    mask = compute_user_mask(stack_bands, formula_mask)
-                mask = mask | invalid_values
-                if apply_source_mask:
-                    mask = mask | get_source_mask(tile.paths["Sentinel"][date], sentinel_source, extent = tile.raster_meta["extent"]) #Masking with source mask if option chosen
-                
-                #Writing vegetation index and mask
-                # write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"),nodata=0)
-                write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
-                write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
-                # write_raster(mask, tile.paths["MaskDir"] / ("Mask_"+date+".nc"))
-
-                del vegetation_index, mask
-                # print('\r', date, " | ", len(tile.dates)-date_index-1, " remaining       ", sep='', end='', flush=True) if date_index != (len(tile.dates) -1) else print('\r', '                                              ', '\r', sep='', end='', flush=True)
+        # Create a pool of workers
+        with multiprocessing.Pool() as pool:
+            # Use pool.imap to process files in parallel while maintaining order
+            results = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
+        
+        # Merge soil_data results from all parallel processes if soil detection is enabled
+        if soil_detection:
+            # Sort results by date to ensure proper ordering of soil detection
+            results.sort(key=lambda x: x[0])
             
+            # Merge the soil_data results in the correct order
+            for date, result_soil_data in results:
+                if result_soil_data is not None:
+                    # Update the main soil_data with results from this date
+                    for key in soil_data.keys():
+                        soil_data[key] = result_soil_data[key]
+                        
         if soil_detection:
             #Writing soil data 
             write_tif(soil_data["state"], tile.raster_meta["attrs"],tile.paths["state_soil"],nodata=0)
