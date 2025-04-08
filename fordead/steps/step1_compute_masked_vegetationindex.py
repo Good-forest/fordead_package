@@ -60,7 +60,7 @@ def cli_compute_masked_vegetationindex(**kwargs):
 def process_one_wrapper(args):
     return process_one(*args)
 
-def process_one(tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_vi):
+def process_one(tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster):
     # Resample and import SENTINEL data
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
 
@@ -83,6 +83,11 @@ def process_one(tile, date, date_index, soil_data, interpolation_order, sentinel
     if apply_source_mask:
         mask = mask | get_source_mask(tile.paths["Sentinel"][date], sentinel_source, extent = tile.raster_meta["extent"]) #Masking with source mask if option chosen
 
+    if compress_raster:
+        write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
+    else:
+        write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
+
     write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
     write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
 
@@ -102,6 +107,7 @@ def compute_masked_vegetationindex(
     formula_mask = "(B2 >= 700)",
     vi = "CRSWIR",
     compress_vi = False,
+    compress_raster = True,
     ignored_period = None,
     extent_shape_path=None,
     path_dict_vi = None,
@@ -137,6 +143,8 @@ def compute_masked_vegetationindex(
         Chosen vegetation index
     compress_vi : bool
         If True, stores the vegetation index as low-resolution floating-point data as small integers in a netCDF file. Uses less disk space but can lead to very small difference in results as the vegetation index is rounded to three decimal places
+    compress_raster : bool
+        If True, compresses the output rasters using the tiff output and stdz algorithm. This can significantly reduce the file size without losing any data. Instead, classical output with netcdf (.nc) format is used.
     ignored_period : list of two strings
         Period whose Sentinel dates to ignore (format 'MM-DD', ex : ["11-01","05-01"])
     extent_shape_path : str
@@ -215,10 +223,11 @@ def compute_masked_vegetationindex(
         #         process_one(tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_vi)
         #
         args_list = [
-                (tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_vi)
+                (tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster)
                 for date_index, date in enumerate(tile.dates) if date in new_dates
             ]
 
+<<<<<<< HEAD
         # Create a pool of workers
         with multiprocessing.Pool() as pool:
             # Use pool.imap to process files in parallel while maintaining order
@@ -228,6 +237,31 @@ def compute_masked_vegetationindex(
         if soil_detection:
             # Sort results by date to ensure proper ordering of soil detection
             results.sort(key=lambda x: x[0])
+=======
+                # Compute mask
+                if soil_detection:
+                    mask = compute_masks(stack_bands, soil_data, date_index)
+                else:
+                    mask = compute_user_mask(stack_bands, formula_mask)
+                mask = mask | invalid_values
+                if apply_source_mask:
+                    mask = mask | get_source_mask(tile.paths["Sentinel"][date], sentinel_source, extent = tile.raster_meta["extent"]) #Masking with source mask if option chosen
+                
+                #Writing vegetation index and mask
+                #original
+                #write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
+                #write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
+                # Add XL
+                if compress_raster:
+                    write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
+                else:
+                    write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
+                write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
+                
+
+                del vegetation_index, mask
+                # print('\r', date, " | ", len(tile.dates)-date_index-1, " remaining       ", sep='', end='', flush=True) if date_index != (len(tile.dates) -1) else print('\r', '                                              ', '\r', sep='', end='', flush=True)
+>>>>>>> master
             
             # Merge the soil_data results in the correct order
             for date, result_soil_data in results:
