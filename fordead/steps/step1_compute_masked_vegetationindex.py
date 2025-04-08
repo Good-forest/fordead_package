@@ -56,9 +56,7 @@ def process_one(tile, date, interpolation_order, compress_raster, compress_vi=Fa
         write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
     else:
         write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
-    del vegetation_index
-    return { date : (stack_bands, invalid_values) }
-    # process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values)
+    return date, (stack_bands, invalid_values)
 
 
 def compute_masked_vegetationindex(
