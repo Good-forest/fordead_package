@@ -127,7 +127,7 @@ def dieback_detection(
 
         args_list = [
             (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi)
-            for date_index, date in enumerate(new_dates) if not date in tile.paths["Anomalies"]
+            for date_index, date in enumerate(new_dates)
         ]
 
         with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
