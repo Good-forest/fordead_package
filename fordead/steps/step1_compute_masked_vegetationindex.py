@@ -190,14 +190,14 @@ def compute_masked_vegetationindex(
         print(f" cpu count : {multiprocessing.cpu_count()}")
         with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
             vi_results = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
+
         mask_values = {}
-        for invalid_value in invalid_values:
-            date = list(invalid_value.keys())[0]
-            stack_bands = invalid_value[date][0]
+        for date, (stack_bands, invalid_values) in vi_results:
             mask_values[date] = {
-                "invalid_values" : invalid_value[date][1],
+                "invalid_values" : invalid_values,
                 "stack_bands" : stack_bands
             }
+
 
         for date_index, date in enumerate(tile.dates):
             process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]))
