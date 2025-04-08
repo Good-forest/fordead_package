@@ -181,14 +181,8 @@ def compute_masked_vegetationindex(
             else:
                 soil_data = initialize_soil_data(tile.raster_meta["shape"],tile.raster_meta["coords"])
 
-        tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0]) #Selects only relevant bands depending on used vegetation index plus forced_bands used in masks
-        
-        # Sequential processing (original approach)
-        # for date_index, date in tqdm(enumerate(tile.dates), total=len(tile.dates), disable=not progress):
-        #     if not date in new_dates: continue
-        #
-        #     process_one_wrapper((tile, date, date_index, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster))
-        # #
+        tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
+
         args_list = [
                 (tile, date, date_index, interpolation_order, compress_raster, compress_vi)
                 for date_index, date in enumerate(tile.dates) if date in new_dates
@@ -211,22 +205,11 @@ def compute_masked_vegetationindex(
             process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]))
 
         if soil_detection:
-            #Writing soil data 
             write_tif(soil_data["state"], tile.raster_meta["attrs"],tile.paths["state_soil"],nodata=0)
             write_tif(soil_data["first_date"], tile.raster_meta["attrs"],tile.paths["first_date_soil"],nodata=0)
             write_tif(soil_data["count"], tile.raster_meta["attrs"],tile.paths["count_soil"],nodata=0)
-            # write_raster(soil_data["state"],tile.paths["state_soil"])
-            # write_raster(soil_data["first_date"],tile.paths["first_date_soil"])
-            # write_raster(soil_data["count"],tile.paths["count_soil"])
 
-    #Add paths to vi and mask to TileInfo object
     tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
                         path_masks = tile.paths["MaskDir"])
     
-    #Saving TileInfo object
     tile.save_info()
-    
-if __name__ == '__main__':
-    # start_time_debut = time.time()
-    cli_compute_masked_vegetationindex()
-    # print("Calcul des masques et du CRSWIR : %s secondes ---" % (time.time() - start_time_debut))
