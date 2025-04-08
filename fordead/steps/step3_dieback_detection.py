@@ -7,36 +7,30 @@ from fordead.writing_data import write_tif
 from fordead.dieback_detection import detection_anomalies, detection_dieback, save_stress
 from fordead.model_vegetation_index import prediction_vegetation_index, correct_vi_date
 
-@click.command(name='dieback_detection')
-@click.option("-o", "--data_directory",  type=str, help="Path of the output directory")
-@click.option("-s", "--threshold_anomaly",  type=float, default=0.16,
-                    help="Minimum threshold for anomaly detection", show_default=True)
-@click.option("--max_nb_stress_periods",  type=int, default=5,
-                    help="Maximum number of stress periods", show_default=True)
-@click.option("--stress_index_mode",  type=str, default=None,
-                    help="Chosen stress index, if 'mean', the index is the mean of the difference between the vegetation index and the predicted vegetation index for all unmasked dates after the first anomaly subsequently confirmed. If 'weighted_mean', the index is a weighted mean, where for each date used, the weight corresponds to the number of the date (1, 2, 3, etc...) from the first anomaly. If None, the stress periods are not detected, and no informations on stress periods are saved.", show_default=True)
-@click.option("--vi",  type=str, default=None,
-                    help="Chosen vegetation index, only useful if step1 was skipped", show_default=True)
-@click.option("--path_dict_vi",  type=str, default=None,
-                    help="Path of text file to add vegetation index formula, only useful if step1 was skipped", show_default=True)
-def cli_dieback_detection(
-    data_directory,
-    threshold_anomaly=0.16,
-    max_nb_stress_periods = 5,
-    stress_index_mode = None,
-    vi = None,
-    path_dict_vi = None
-    
-    ):
-    """
-    Detects anomalies by comparing the vegetation index and its prediction from the model. 
-    Detects pixels suffering from dieback when there are 3 successive anomalies. If pixels detected as suffering from dieback have 3 successive dates without anomalies, they are considered healthy again.
-    If stress_index_mode parameter is given, Those periods between detection and return to normal are saved, with the date of first anomaly, date of return to normal, number of dates, and an associated stress index.
-    Anomalies and dieback data are written in the data_directory
-    See details here : https://fordead.gitlab.io/fordead_package/docs/user_guides/english/03_dieback_detection/
-    \f
-    """
-    dieback_detection(data_directory, threshold_anomaly, max_nb_stress_periods, stress_index_mode, vi, path_dict_vi)
+def process_one(tile, first_detection_date_index, coeff_model, date_index, date, dieback_data, stress_data, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_index_mode):
+    vegetation_index, mask = import_masked_vi(tile.paths,date)
+    if tile.parameters["correct_vi"]:
+        vegetation_index, tile.correction_vi = correct_vi_date(vegetation_index, mask,forest_mask, tile.large_scale_model, date, tile.correction_vi)
+
+    mask = mask | (date_index < first_detection_date_index)
+
+    predicted_vi=prediction_vegetation_index(coeff_model,[date])
+
+    anomalies, diff_vi = detection_anomalies(vegetation_index, mask, predicted_vi, threshold_anomaly,
+                                             vi = vi, path_dict_vi = path_dict_vi)
+
+    write_tif(anomalies, first_detection_date_index.attrs, tile.paths["AnomaliesDir"] / str("Anomalies_" + date + ".tif"),nodata=0)
+    # del vegetation_index, mask, predicted_vi, anomalies, diff_vi
+    return date, (anomalies, diff_vi, mask)
+
+    # dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index)
+
+    # if stress_index_mode is not None: stress_data = save_stress(stress_data, dieback_data, changing_pixels, diff_vi, mask, stress_index_mode)
+
+    # del vegetation_index, mask, predicted_vi, anomalies, changing_pixels, diff_vi
+    # return dieback_data, stress_data
+
+
 
 
 def dieback_detection(
@@ -126,38 +120,21 @@ def dieback_detection(
         else:
             stress_data = initialize_stress_data(first_detection_date_index.shape,first_detection_date_index.coords, max_nb_stress_periods)
    
+        forest_mask = None
         if tile.parameters["correct_vi"]:
             forest_mask = import_binary_raster(tile.paths["forest_mask"])
             
         #dieback DETECTION
         for date_index, date in tqdm(enumerate(tile.dates), total=len(tile.dates), disable=not progress):
-            if date in new_dates:
-                vegetation_index, mask = import_masked_vi(tile.paths,date)
-                if tile.parameters["correct_vi"]:
-                    vegetation_index, tile.correction_vi = correct_vi_date(vegetation_index, mask,forest_mask, tile.large_scale_model, date, tile.correction_vi)
-
-                mask = mask | (date_index < first_detection_date_index) #Masking pixels where date was used for training
-                
-                predicted_vi=prediction_vegetation_index(coeff_model,[date])
-                
-                anomalies, diff_vi = detection_anomalies(vegetation_index, mask, predicted_vi, threshold_anomaly, 
-                                                vi = vi, path_dict_vi = path_dict_vi)
-                                
-                dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index)
-                
-                if stress_index_mode is not None: stress_data = save_stress(stress_data, dieback_data, changing_pixels, diff_vi, mask, stress_index_mode) 
-
-                write_tif(anomalies, first_detection_date_index.attrs, tile.paths["AnomaliesDir"] / str("Anomalies_" + date + ".tif"),nodata=0)
-                # print('\r', date, " | ", len(tile.dates)-date_index-1, " remaining         ", sep='', end='', flush=True) if date_index != (len(tile.dates) -1) else print('\r', "                                              ", sep='', end='\r', flush=True) 
-                del vegetation_index, mask, predicted_vi, anomalies, changing_pixels, diff_vi
-
+            if not date in new_dates: continue
+            r = process_one(tile, first_detection_date_index, coeff_model, date_index, date, dieback_data, stress_data, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_index_mode)
         tile.last_computed_anomaly = new_dates[-1]
   
-        write_tif(dieback_data["state"], first_detection_date_index.attrs,tile.paths["state_dieback"],nodata=0)
-        write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
-        write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
-        write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
-        del dieback_data
+        # write_tif(dieback_data["state"], first_detection_date_index.attrs,tile.paths["state_dieback"],nodata=0)
+        # write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
+        # write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
+        # write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
+        # del dieback_data
         
         if stress_index_mode is not None:
             # valid_model = import_binary_raster(tile.paths["sufficient_coverage_mask"])
