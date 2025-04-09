@@ -5,6 +5,7 @@ from fordead.import_data import import_coeff_model, import_dieback_data, import_
 from fordead.writing_data import write_tif
 from fordead.dieback_detection import detection_anomalies, detection_dieback, save_stress
 from fordead.model_vegetation_index import prediction_vegetation_index, correct_vi_date
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def process_dieback_wrapper(args): return process_dieback(*args)
 
@@ -123,23 +124,20 @@ def dieback_detection(
         forest_mask = None
         if tile.parameters["correct_vi"]:
             forest_mask = import_binary_raster(tile.paths["forest_mask"])
-            
 
-        args_list = [
-            (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi)
+
+        # with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+        #     dieback_results = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
+
+        dieback_results = []
+        with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+            futures = [
+                executor.submit(process_one_wrapper, (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi))
             for date_index, date in enumerate(tile.dates) if date in new_dates
-        ]
+            ]
+            for future in tqdm(as_completed(futures), total=len(futures), disable=not progress, desc="Processing"):
+                dieback_results.append(future.result())
 
-
-        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-            dieback_results = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
-        with open(tile.data_directory / "tmp.txt", "w") as f:
-            for c_data in dieback_results:
-                date, (anomalies, diff_vi, mask) = c_data
-                f.write(str(date) + "\n")
-                f.write(str(anomalies) + "\n")
-                f.write(str(diff_vi) + "\n")
-                f.write(str(mask) + "\n")
 
         dieback_values = {}
         for date, (anomalies, diff_vi, mask) in dieback_results:
