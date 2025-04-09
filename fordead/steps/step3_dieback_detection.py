@@ -127,11 +127,19 @@ def dieback_detection(
 
         args_list = [
             (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi)
-            for date_index, date in enumerate(new_dates)
+            for date_index, date in enumerate(tile.dates) if date in new_dates
         ]
+
 
         with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
             dieback_results = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
+        with open(tile.data_directory / "tmp.txt", "w") as f:
+            for c_data in dieback_results:
+                date, (anomalies, diff_vi, mask) = c_data
+                f.write(str(date) + "\n")
+                f.write(str(anomalies) + "\n")
+                f.write(str(diff_vi) + "\n")
+                f.write(str(mask) + "\n")
 
         dieback_values = {}
         for date, (anomalies, diff_vi, mask) in dieback_results:
@@ -141,7 +149,8 @@ def dieback_detection(
                 "mask": mask
             }
 
-        for date_index, date in enumerate(new_dates):
+        for date_index, date in enumerate(tile.dates):
+            if date not in new_dates: continue
             dieback_data, stress_data = process_dieback_wrapper((dieback_values[date]["anomalies"], dieback_values[date]["diff_vi"], dieback_values[date]["mask"], date_index, dieback_data, stress_data, stress_index_mode))
 
         tile.last_computed_anomaly = new_dates[-1]
