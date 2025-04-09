@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 from tqdm import tqdm
 import multiprocessing
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import concurrent.futures
 #%% ===========================================================================
@@ -181,15 +182,15 @@ def compute_masked_vegetationindex(
 
         tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
 
-        args_list = [
-                (tile, date, interpolation_order, compress_raster, compress_vi)
+
+        vi_results = []
+        with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+            futures = [
+                executor.submit(process_one_wrapper, (tile, date, interpolation_order, compress_raster, compress_vi))
                 for  date in tile.dates if date in new_dates
             ]
-
-        # Create a pool of workers
-        print(f" cpu count : {multiprocessing.cpu_count()}")
-        with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-            vi_results = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
+            for future in tqdm(as_completed(futures), total=len(futures), disable=not progress, desc="Processing"):
+                vi_results.append(future.result())
 
         mask_values = {}
         for date, (stack_bands, invalid_values) in vi_results:
