@@ -201,6 +201,7 @@ def compute_masked_vegetationindex(
 
 
         for date_index, date in enumerate(tile.dates):
+            if date not in new_dates: continue
             process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]))
 
         if soil_detection:
