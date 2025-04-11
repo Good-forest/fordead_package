@@ -15,6 +15,7 @@ import pickle
 import shutil
 from scipy import ndimage
 import geopandas as gp
+import rasterio
 
 
 # class sat_reader():
@@ -791,12 +792,15 @@ def import_coeff_model(path, chunks = None):
         Array containing the coefficients to the model for vegetation index prediction.
 
     """
-
-    # coeff_model = xr.open_dataset(path, engine="rasterio")
+    # Use rasterio directly with specific options for better multiprocessing compatibility
+    with rasterio.open(path, 'r', sharing=False) as src:
+        coeff_model = rioxarray.open_rasterio(
+            src,
+            chunks=chunks,
+            lock=False,  # Disable locking for better multiprocessing performance
+            masked=True  # Handle nodata values properly
+        )
     
-    coeff_model = rioxarray.open_rasterio(path,chunks = chunks)
-    # coeff_model = coeff_model.rename({"Band1" : 1, "Band2" : 2,"Band3" : 3,"Band4" : 4,"Band5" : 5}).to_array(dim = "coeff").squeeze("band")
-
     coeff_model = coeff_model.rename({"band": "coeff"})
     return coeff_model
 
