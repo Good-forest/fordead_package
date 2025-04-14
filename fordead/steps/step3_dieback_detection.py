@@ -39,9 +39,9 @@ def dieback_loop(tile, first_detection_date_index, coeff_model, new_dates, fores
         if not date in new_dates: continue
         date, (anomalies, diff_vi, mask) = process_one(tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi)
         dieback_data, stress_data = process_dieback_wrapper((anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode))
+    return dieback_data, stress_data
 
 def dieback_multithread(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress=True):
-    print("DIEBACK DETECTION")
     dieback_results = []
     workers = multiprocessing.cpu_count()
     with ProcessPoolExecutor(max_workers=workers) as executor:
@@ -62,6 +62,7 @@ def dieback_multithread(tile, first_detection_date_index, coeff_model, new_dates
     for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if date not in new_dates: continue
         dieback_data, stress_data = process_dieback_wrapper((dieback_values[date]["anomalies"], dieback_values[date]["diff_vi"], dieback_values[date]["mask"], date_index, dieback_data, stress_data, stress_index_mode))
+    return dieback_data, stress_data
 
 
 
@@ -161,7 +162,7 @@ def dieback_detection(
     f = dieback_loop
     if multi_process:
         f = dieback_multithread
-    f(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress)
+    dieback_data, stress_data = f(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress)
 
     tile.last_computed_anomaly = new_dates[-1]
 

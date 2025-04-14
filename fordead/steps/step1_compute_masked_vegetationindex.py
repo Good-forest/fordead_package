@@ -60,11 +60,12 @@ def process_one(tile, date, interpolation_order, compress_raster, compress_vi=Fa
     return date, (stack_bands, invalid_values)
 
 def process_batch_loop(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress):
-    for date in tqdm(tile.dates, disable=not progress, desc="Processing"):
+    for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if not date in new_dates: continue
         date, (stack_bands, invalid_values) = process_one(tile, date, interpolation_order, compress_raster, compress_vi)
-        process_mask(tile, date, tile.dates.index(date), soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values)
+        process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values)
 
+    return soil_data
 
 def process_batch_multithread(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress):
     vi_results = []
@@ -83,10 +84,10 @@ def process_batch_multithread(tile, new_dates, soil_data, interpolation_order, s
             "stack_bands" : stack_bands
         }
 
-
-    for date_index, date in enumerate(tile.dates):
+    for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if date not in new_dates: continue
         process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]))
+    return soil_data
 
 
 
@@ -109,6 +110,7 @@ def compute_masked_vegetationindex(
     extent_shape_path=None,
     path_dict_vi = None,
     progress=True,
+    multithread=False
     ):
     """
     Computes masks and masked vegetation index for each SENTINEL date under a cloudiness threshold.
@@ -218,7 +220,10 @@ def compute_masked_vegetationindex(
 
     tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
 
-    process_batch_multithread(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress)
+    f = process_batch_loop
+    if multithread:
+        f = process_batch_multithread
+    soil_data = f(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress)
     if soil_detection:
         write_tif(soil_data["state"], tile.raster_meta["attrs"],tile.paths["state_soil"],nodata=0)
         write_tif(soil_data["first_date"], tile.raster_meta["attrs"],tile.paths["first_date_soil"],nodata=0)
