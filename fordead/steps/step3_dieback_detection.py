@@ -131,7 +131,7 @@ def dieback_detection(
 
         dieback_results = []
         workers = multiprocessing.cpu_count() if multi_process else 1
-        with ProcessPoolExecutor(max_workers=) as executor:
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             futures = [
                 executor.submit(process_one_wrapper, (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi))
             for date_index, date in enumerate(tile.dates) if date in new_dates
