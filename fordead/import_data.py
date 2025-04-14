@@ -5,11 +5,12 @@ Created on Mon Nov  2 09:42:31 2020
 @author: Raphael Dutrieux
 """
 
+import os
 import numpy as np
 import xarray as xr
 import rioxarray
 import re
-# import datetime
+from datetime import datetime
 from pathlib import Path
 import pickle
 import shutil
@@ -186,6 +187,7 @@ def retrieve_date_from_string(string):
         Date in the format YYYY-MM-DD
 
     """
+    formatted_date=None
     matchDMY = re.search(r'[0-3]\d-[0-1]\d-(19|20)\d{2}|[0-3]\d_[0-1]\d_(19|20)\d{2}|[0-3]\d[0-1]\d(19|20)\d{2}', string)
     matchYMD = re.search(r'(19|20)\d{2}-[0-1]\d-[0-3]\d|(19|20)\d{2}_[0-1]\d_[0-3]\d|(19|20)\d{2}[0-1]\d[0-3]\d', string)
     if matchDMY!=None:
@@ -202,9 +204,6 @@ def retrieve_date_from_string(string):
         elif len(raw_date)==8:
             formatted_date=raw_date[:4]+"-"+raw_date[4:6]+"-"+raw_date[-2:]
             
-    else:
-        return None
-    # print(formatted_date)
     return formatted_date
 
 class TileInfo:
@@ -225,8 +224,6 @@ class TileInfo:
         self.data_directory = Path(data_directory)
         self.data_directory.mkdir(parents=True, exist_ok=True)
         self.paths={}
-        
-        # print(globals())
 
 
     def import_info(self, path= None):
@@ -345,30 +342,33 @@ class TileInfo:
         for attr in attrs:
             if hasattr(self, attr): delattr(self, attr)
                     
-    def getdict_datepaths(self, key, path_dir):
+    def getdict_datepaths(self, key, path_dir,end_date=None):
         """
         Parameters
         ----------
         path_dir : str
             Directory containing files with filenames containing dates in the format YYYY-MM-DD, YYYY_MM_DD, YYYYMMDD, DD-MM-YYYY, DD_MM_YYYY or DDMMYYYY
-    
+
         Returns
         -------
         dict_datepaths : dict
             Dictionnary linking formatted dates with the paths of the files from which the dates where extracted
-    
+
         """
         path_dir=Path(path_dir)
         dict_datepaths={}
         for path in path_dir.glob("*"):
-            if not(".xml" in str(path)): #To ignore temporary files
-                formatted_date=retrieve_date_from_string(path.stem)
-                if formatted_date != None: #To ignore files or directories with no dates which might be in the same directory
-                    dict_datepaths[formatted_date] = path
-            
+            formatted_date=retrieve_date_from_string(path.stem)
+            if formatted_date == None: continue
+            f_date = datetime.strptime(formatted_date, '%Y-%m-%d').date()
+            if end_date and f_date >= end_date: continue
+
+            dict_datepaths[formatted_date] = path
+
+
         sorted_dict_datepaths = dict(sorted(dict_datepaths.items(), key=lambda key_value: key_value[0]))
         self.paths[key] = sorted_dict_datepaths
-        
+
     def getdict_paths(self,
                       path_vi, path_masks):
         """

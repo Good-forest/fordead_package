@@ -64,6 +64,7 @@ def compute_masked_vegetationindex(
     input_directory,
     data_directory,
     start_date = "2015-01-01",
+    end_date=None,
     lim_perc_cloud=0.4,
     interpolation_order = 0,
     sentinel_source = "theia",
@@ -147,7 +148,7 @@ def compute_masked_vegetationindex(
         tile.delete_attributes("last_computed_anomaly","dates","last_date_export")
 
     # All SENTINEL data in the input directory is detected, and paths are added to the TileInfo object. For example, after this operation tile.paths["Sentinel"]["YYYY-MM-DD"]["B2"] brings up the path to the B2 band file of the specified date?
-    tile.getdict_datepaths("Sentinel",Path(input_directory)) #adds a dictionnary to tile.paths with key "Sentinel" and with value another dictionnary where keys are ordered and formatted dates and values are the paths to the directories containing the different bands
+    tile.getdict_datepaths("Sentinel",Path(input_directory), end_date) #adds a dictionnary to tile.paths with key "Sentinel" and with value another dictionnary where keys are ordered and formatted dates and values are the paths to the directories containing the different bands
     tile.paths["Sentinel"] = get_band_paths(tile.paths["Sentinel"]) #Replaces the paths to the directories for each date with a dictionnary where keys are the bands, and values are their paths
     
     #Adding directories for ouput. Directories are created and their paths added to the TileInfo object.
@@ -211,5 +212,4 @@ def compute_masked_vegetationindex(
 
     tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
                         path_masks = tile.paths["MaskDir"])
-    
     tile.save_info()
