@@ -110,7 +110,7 @@ def compute_masked_vegetationindex(
     extent_shape_path=None,
     path_dict_vi = None,
     progress=True,
-    multithread=False
+    multi_process=False
     ):
     """
     Computes masks and masked vegetation index for each SENTINEL date under a cloudiness threshold.
@@ -221,7 +221,7 @@ def compute_masked_vegetationindex(
     tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
 
     f = process_batch_loop
-    if multithread:
+    if multi_process:
         f = process_batch_multithread
     soil_data = f(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress)
     if soil_detection:
