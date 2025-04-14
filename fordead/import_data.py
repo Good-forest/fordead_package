@@ -361,9 +361,10 @@ class TileInfo:
             formatted_date=retrieve_date_from_string(path.stem)
             if formatted_date == None: continue
             f_date = datetime.strptime(formatted_date, '%Y-%m-%d').date()
-            if end_date and f_date >= end_date: continue
+            if end_date and f_date > end_date: continue
 
             dict_datepaths[formatted_date] = path
+
 
 
         sorted_dict_datepaths = dict(sorted(dict_datepaths.items(), key=lambda key_value: key_value[0]))
