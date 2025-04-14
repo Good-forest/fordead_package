@@ -59,6 +59,37 @@ def process_one(tile, date, interpolation_order, compress_raster, compress_vi=Fa
         write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
     return date, (stack_bands, invalid_values)
 
+def process_batch_loop(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress):
+    for date in tqdm(tile.dates, disable=not progress, desc="Processing"):
+        if not date in new_dates: continue
+        date, (stack_bands, invalid_values) = process_one(tile, date, interpolation_order, compress_raster, compress_vi)
+        process_mask(tile, date, tile.dates.index(date), soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values)
+
+
+def process_batch_multithread(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress):
+    vi_results = []
+    with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+        futures = [
+            executor.submit(process_one_wrapper, (tile, date, interpolation_order, compress_raster, compress_vi))
+            for  date in tile.dates if date in new_dates
+        ]
+        for future in tqdm(as_completed(futures), total=len(futures), disable=not progress, desc="Processing"):
+            vi_results.append(future.result())
+
+    mask_values = {}
+    for date, (stack_bands, invalid_values) in vi_results:
+        mask_values[date] = {
+            "invalid_values" : invalid_values,
+            "stack_bands" : stack_bands
+        }
+
+
+    for date_index, date in enumerate(tile.dates):
+        if date not in new_dates: continue
+        process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]))
+
+
+
 
 def compute_masked_vegetationindex(
     input_directory,
@@ -168,47 +199,30 @@ def compute_masked_vegetationindex(
 
     if  len(new_dates) == 0:
         print("Computing masks and vegetation index : no new dates")
-    else:
-        print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
-        
-        tile.raster_meta = get_raster_metadata(list(tile.paths["Sentinel"].values())[-1][next(x for x in list(tile.paths["Sentinel"].values())[1] if x in ["B2","B3","B4","B8"])], #path of first 10m resolution band found
-                                               extent_shape_path = extent_shape_path)  #Imports all raster metadata from one band. 
-        
-        #Import or initialize data for the soil mask
-        if soil_detection:
-            if tile.paths["state_soil"].exists():
-                soil_data = import_soil_data(tile.paths)
-            else:
-                soil_data = initialize_soil_data(tile.raster_meta["shape"],tile.raster_meta["coords"])
 
-        tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
+        tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
+                            path_masks = tile.paths["MaskDir"])
+        tile.save_info()
+        return
+    print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
 
+    tile.raster_meta = get_raster_metadata(list(tile.paths["Sentinel"].values())[-1][next(x for x in list(tile.paths["Sentinel"].values())[1] if x in ["B2","B3","B4","B8"])], #path of first 10m resolution band found
+                                           extent_shape_path = extent_shape_path)  #Imports all raster metadata from one band. 
 
-        vi_results = []
-        with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
-            futures = [
-                executor.submit(process_one_wrapper, (tile, date, interpolation_order, compress_raster, compress_vi))
-                for  date in tile.dates if date in new_dates
-            ]
-            for future in tqdm(as_completed(futures), total=len(futures), disable=not progress, desc="Processing"):
-                vi_results.append(future.result())
+    #Import or initialize data for the soil mask
+    if soil_detection:
+        if tile.paths["state_soil"].exists():
+            soil_data = import_soil_data(tile.paths)
+        else:
+            soil_data = initialize_soil_data(tile.raster_meta["shape"],tile.raster_meta["coords"])
 
-        mask_values = {}
-        for date, (stack_bands, invalid_values) in vi_results:
-            mask_values[date] = {
-                "invalid_values" : invalid_values,
-                "stack_bands" : stack_bands
-            }
+    tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
 
-
-        for date_index, date in enumerate(tile.dates):
-            if date not in new_dates: continue
-            process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]))
-
-        if soil_detection:
-            write_tif(soil_data["state"], tile.raster_meta["attrs"],tile.paths["state_soil"],nodata=0)
-            write_tif(soil_data["first_date"], tile.raster_meta["attrs"],tile.paths["first_date_soil"],nodata=0)
-            write_tif(soil_data["count"], tile.raster_meta["attrs"],tile.paths["count_soil"],nodata=0)
+    process_batch_multithread(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress)
+    if soil_detection:
+        write_tif(soil_data["state"], tile.raster_meta["attrs"],tile.paths["state_soil"],nodata=0)
+        write_tif(soil_data["first_date"], tile.raster_meta["attrs"],tile.paths["first_date_soil"],nodata=0)
+        write_tif(soil_data["count"], tile.raster_meta["attrs"],tile.paths["count_soil"],nodata=0)
 
     tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
                         path_masks = tile.paths["MaskDir"])

@@ -797,11 +797,12 @@ def import_coeff_model(path, chunks = None):
         coeff_model = rioxarray.open_rasterio(
             src,
             chunks=chunks,
-            lock=False,  # Disable locking for better multiprocessing performance
-            masked=True  # Handle nodata values properly
+            lock=False,
+            masked=True
         )
     
     coeff_model = coeff_model.rename({"band": "coeff"})
+    coeff_model.load()
     return coeff_model
 
 def import_first_detection_date_index(path,chunks = None):

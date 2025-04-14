@@ -34,6 +34,34 @@ def process_one(tile, first_detection_date_index, coeff_model, date_index, date,
     write_tif(anomalies, first_detection_date_index.attrs, tile.paths["AnomaliesDir"] / str("Anomalies_" + date + ".tif"),nodata=0)
     return date, (anomalies, diff_vi, mask)
 
+def dieback_loop(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress=True):
+    for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
+        if not date in new_dates: continue
+        date, (anomalies, diff_vi, mask) = process_one(tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi)
+        dieback_data, stress_data = process_dieback_wrapper((anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode))
+
+def dieback_multithread(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress=True):
+    print("DIEBACK DETECTION")
+    dieback_results = []
+    workers = multiprocessing.cpu_count()
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = [
+            executor.submit(process_one_wrapper, (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi))
+            for date_index, date in enumerate(tile.dates) if date in new_dates
+        ]
+        for future in tqdm(as_completed(futures), total=len(futures), disable=not progress, desc="Processing"):
+            dieback_results.append(future.result())
+
+    dieback_values = {}
+    for date, (anomalies, diff_vi, mask) in dieback_results:
+        dieback_values[date] = {
+            "anomalies": anomalies,
+            "diff_vi": diff_vi,
+            "mask": mask
+        }
+    for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
+        if date not in new_dates: continue
+        dieback_data, stress_data = process_dieback_wrapper((dieback_values[date]["anomalies"], dieback_values[date]["diff_vi"], dieback_values[date]["mask"], date_index, dieback_data, stress_data, stress_index_mode))
 
 
 
@@ -105,83 +133,66 @@ def dieback_detection(
     tile.add_path("nb_dates_stress", tile.data_directory / "DataStress" / "nb_dates_stress.tif")
     tile.add_path("stress_index", tile.data_directory / "DataStress" / "stress_index.tif")
 
-    #Verify if there are new SENTINEL dates
     new_dates = tile.dates[tile.dates > tile.last_computed_anomaly] if hasattr(tile, "last_computed_anomaly") else tile.dates[tile.dates >= tile.parameters["min_last_date_training"]]
+
     if  len(new_dates) == 0:
         print("Dieback detection : no new dates")
+        tile.getdict_datepaths("Anomalies",tile.paths["AnomaliesDir"]) # Get paths and dates to previously calculated anomalies
+        tile.save_info()
+        return
+
+    print("Dieback detection : " + str(len(new_dates))+ " new dates")
+
+    first_detection_date_index = import_first_detection_date_index(tile.paths["first_detection_date_index"])
+    coeff_model = import_coeff_model(tile.paths["coeff_model"])
+
+    if tile.paths["state_dieback"].exists():
+        dieback_data = import_dieback_data(tile.paths)
     else:
-        print("Dieback detection : " + str(len(new_dates))+ " new dates")
-        
-        #IMPORTING DATA
-        first_detection_date_index = import_first_detection_date_index(tile.paths["first_detection_date_index"])
-        coeff_model = import_coeff_model(tile.paths["coeff_model"])
-        
-        if tile.paths["state_dieback"].exists():
-            dieback_data = import_dieback_data(tile.paths)
+        dieback_data = initialize_dieback_data(first_detection_date_index.shape,first_detection_date_index.coords)
+    if tile.paths["nb_dates_stress"].exists(): 
+        stress_data = import_stress_data(tile.paths)
+    else:
+        stress_data = initialize_stress_data(first_detection_date_index.shape,first_detection_date_index.coords, max_nb_stress_periods)
+
+    forest_mask = None
+    if tile.parameters["correct_vi"]:
+        forest_mask = import_binary_raster(tile.paths["forest_mask"])
+    f = dieback_loop
+    if multi_process:
+        f = dieback_multithread
+    f(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress)
+
+    tile.last_computed_anomaly = new_dates[-1]
+
+    write_tif(dieback_data["state"], first_detection_date_index.attrs,tile.paths["state_dieback"],nodata=0)
+    write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
+    write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
+    write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
+    del dieback_data
+    
+    if stress_index_mode is not None:
+        # valid_model = import_binary_raster(tile.paths["sufficient_coverage_mask"])
+        # valid_model = valid_model.where(stress_data["nb_periods"]<=max_nb_stress_periods,False)
+        too_many_stress_periods_mask = stress_data["nb_periods"]<=max_nb_stress_periods
+        write_tif(too_many_stress_periods_mask, first_detection_date_index.attrs,tile.paths["too_many_stress_periods_mask"],nodata=0) 
+
+        if stress_index_mode == "mean":
+            stress_index = stress_data["cum_diff"]/stress_data["nb_dates"]
+        elif stress_index_mode == "weighted_mean":
+            stress_index = stress_data["cum_diff"]/(stress_data["nb_dates"]*(stress_data["nb_dates"]+1)/2)
         else:
-            dieback_data = initialize_dieback_data(first_detection_date_index.shape,first_detection_date_index.coords)
-        if tile.paths["nb_dates_stress"].exists(): 
-            stress_data = import_stress_data(tile.paths)
-        else:
-            stress_data = initialize_stress_data(first_detection_date_index.shape,first_detection_date_index.coords, max_nb_stress_periods)
-   
-        forest_mask = None
-        if tile.parameters["correct_vi"]:
-            forest_mask = import_binary_raster(tile.paths["forest_mask"])
+            raise Exception("Unrecognized stress_index_mode")
+               
+        write_tif(stress_index, first_detection_date_index.attrs,tile.paths["stress_index"],nodata=0)
+        del stress_index
+        #Writing dieback data to rasters
+        write_tif(stress_data["date"], first_detection_date_index.attrs,tile.paths["dates_stress"],nodata=0)
+        write_tif(stress_data["nb_periods"], first_detection_date_index.attrs,tile.paths["nb_periods_stress"],nodata=0)
+        write_tif(stress_data["cum_diff"], first_detection_date_index.attrs,tile.paths["cum_diff_stress"],nodata=0)
+        write_tif(stress_data["nb_dates"], first_detection_date_index.attrs,tile.paths["nb_dates_stress"],nodata=0)
+        del stress_data
 
-        dieback_results = []
-        workers = multiprocessing.cpu_count() if multi_process else 1
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            futures = [
-                executor.submit(process_one_wrapper, (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi))
-            for date_index, date in enumerate(tile.dates) if date in new_dates
-            ]
-            for future in tqdm(as_completed(futures), total=len(futures), disable=not progress, desc="Processing"):
-                dieback_results.append(future.result())
-
-        dieback_values = {}
-        for date, (anomalies, diff_vi, mask) in dieback_results:
-            dieback_values[date] = {
-                "anomalies": anomalies,
-                "diff_vi": diff_vi,
-                "mask": mask
-            }
-
-        for date_index, date in enumerate(tile.dates):
-            if date not in new_dates: continue
-            dieback_data, stress_data = process_dieback_wrapper((dieback_values[date]["anomalies"], dieback_values[date]["diff_vi"], dieback_values[date]["mask"], date_index, dieback_data, stress_data, stress_index_mode))
-
-        tile.last_computed_anomaly = new_dates[-1]
-  
-        write_tif(dieback_data["state"], first_detection_date_index.attrs,tile.paths["state_dieback"],nodata=0)
-        write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
-        write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
-        write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
-        del dieback_data
-        
-        if stress_index_mode is not None:
-            # valid_model = import_binary_raster(tile.paths["sufficient_coverage_mask"])
-            # valid_model = valid_model.where(stress_data["nb_periods"]<=max_nb_stress_periods,False)
-            too_many_stress_periods_mask = stress_data["nb_periods"]<=max_nb_stress_periods
-            write_tif(too_many_stress_periods_mask, first_detection_date_index.attrs,tile.paths["too_many_stress_periods_mask"],nodata=0) 
-
-            if stress_index_mode == "mean":
-                stress_index = stress_data["cum_diff"]/stress_data["nb_dates"]
-            elif stress_index_mode == "weighted_mean":
-                stress_index = stress_data["cum_diff"]/(stress_data["nb_dates"]*(stress_data["nb_dates"]+1)/2)
-            else:
-                raise Exception("Unrecognized stress_index_mode")
-                   
-            write_tif(stress_index, first_detection_date_index.attrs,tile.paths["stress_index"],nodata=0)
-            del stress_index
-            #Writing dieback data to rasters
-            write_tif(stress_data["date"], first_detection_date_index.attrs,tile.paths["dates_stress"],nodata=0)
-            write_tif(stress_data["nb_periods"], first_detection_date_index.attrs,tile.paths["nb_periods_stress"],nodata=0)
-            write_tif(stress_data["cum_diff"], first_detection_date_index.attrs,tile.paths["cum_diff_stress"],nodata=0)
-            write_tif(stress_data["nb_dates"], first_detection_date_index.attrs,tile.paths["nb_dates_stress"],nodata=0)
-            del stress_data
-
-    # update tile info with new anomalies    
     tile.getdict_datepaths("Anomalies",tile.paths["AnomaliesDir"]) # Get paths and dates to previously calculated anomalies
     tile.save_info()
 
