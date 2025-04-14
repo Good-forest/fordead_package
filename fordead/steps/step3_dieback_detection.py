@@ -44,7 +44,8 @@ def dieback_detection(
     stress_index_mode = None,
     vi = None,
     path_dict_vi = None,
-    progress=True
+    progress=True,
+    multi_process=False
     ):
     """
     Detects anomalies by comparing the vegetation index and its prediction from the model. 
@@ -128,19 +129,15 @@ def dieback_detection(
         if tile.parameters["correct_vi"]:
             forest_mask = import_binary_raster(tile.paths["forest_mask"])
 
-
-        # with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-        #     dieback_results = list(tqdm(pool.imap(process_one_wrapper, args_list), total=len(args_list), disable=not progress))
-
         dieback_results = []
-        with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
+        workers = multiprocessing.cpu_count() if multi_process else 1
+        with ProcessPoolExecutor(max_workers=) as executor:
             futures = [
                 executor.submit(process_one_wrapper, (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi))
             for date_index, date in enumerate(tile.dates) if date in new_dates
             ]
             for future in tqdm(as_completed(futures), total=len(futures), disable=not progress, desc="Processing"):
                 dieback_results.append(future.result())
-
 
         dieback_values = {}
         for date, (anomalies, diff_vi, mask) in dieback_results:
