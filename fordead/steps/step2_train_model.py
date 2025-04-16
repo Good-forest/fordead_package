@@ -94,7 +94,6 @@ def train_model(
         print("Model already calculated")
         tile.save_info()
         return
-    print("Computing model")
     tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
                         path_masks = tile.paths["MaskDir"])
     
@@ -114,7 +113,6 @@ def train_model(
     # Modéliser le CRSWIR
     stack_masks = stack_masks | detection_dates #Masking data not used in training
     coeff_model = model_vi(stack_vi, stack_masks)
-    print(coeff_model)
     
     #Ecrire rasters de l'index de la dernière date utilisée, les coefficients, la zone utilisable
     write_tif(first_detection_date_index,tile.raster_meta["attrs"], tile.paths["first_detection_date_index"],nodata=0)

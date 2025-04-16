@@ -773,9 +773,6 @@ def import_stackedmaskedVI(tuile,min_date = None, max_date=None,chunks = None):
     # add XL
     # stack_vi["band_data"] if written with write_tif instead of stack_vi["Band1"]
     # list(stack_vi.data_vars)[0] to get the name of the first variable (supposed to be the only one)
-    print(list(stack_vi.data_vars))
-    print(list(stack_vi.data_vars)[0])
-    print(stack_vi[list(stack_vi.data_vars)[0]])
     return stack_vi[list(stack_vi.data_vars)[0]], stack_masks
 
     
