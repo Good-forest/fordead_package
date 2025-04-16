@@ -825,6 +825,7 @@ def import_first_detection_date_index(path,chunks = None):
     """
     
     first_detection_date_index=rioxarray.open_rasterio(path,chunks = chunks).squeeze("band")
+    first_detection_date_index.load()
     return first_detection_date_index
 
 def import_dieback_data(dict_paths, chunks = None):
@@ -858,6 +859,7 @@ def import_dieback_data(dict_paths, chunks = None):
                      "first_date_unconfirmed" : first_date_unconfirmed_dieback,
                      "count" : count_dieback})
     dieback_data=dieback_data.squeeze("band")
+    dieback_data.load()
 
 
     return dieback_data
@@ -898,6 +900,7 @@ def import_stress_data(dict_paths, chunks = None):
     #                  "cum_diff" : cum_diff.assign_coords({"period" : range(1,cum_diff.period.size+1)}),
     #                  "nb_dates" : nb_dates.assign_coords({"period" : range(1,nb_dates.period.size+1)})
     #                  })
+    stress_data.load()
 
     return stress_data
 
@@ -922,6 +925,7 @@ def import_stress_index(path, chunks = None):
 
     stress_index = stress_index.assign_coords({"period" : range(1,stress_index.period.size+1)})
     # stress_index = stress_index.rename({"Band1" : 0, "Band2" : 1,"Band3" : 2,"Band4" : 3,"Band5" : 4, "Band6"}).to_array(dim = "period").squeeze("band")
+    stress_index.load()
 
     return stress_index 
 
