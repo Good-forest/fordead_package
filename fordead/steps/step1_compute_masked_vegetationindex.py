@@ -89,9 +89,6 @@ def process_batch_multithread(tile, new_dates, soil_data, interpolation_order, s
         process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]))
     return soil_data
 
-
-
-
 def compute_masked_vegetationindex(
     input_directory,
     data_directory,
@@ -201,15 +198,11 @@ def compute_masked_vegetationindex(
 
     if  len(new_dates) == 0:
         print("Computing masks and vegetation index : no new dates")
-
         tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
                             path_masks = tile.paths["MaskDir"])
         tile.save_info()
         return
     print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
-
-    tile.raster_meta = get_raster_metadata(list(tile.paths["Sentinel"].values())[-1][next(x for x in list(tile.paths["Sentinel"].values())[1] if x in ["B2","B3","B4","B8"])], #path of first 10m resolution band found
-                                           extent_shape_path = extent_shape_path)  #Imports all raster metadata from one band. 
 
     #Import or initialize data for the soil mask
     if soil_detection:

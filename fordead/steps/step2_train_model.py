@@ -37,6 +37,7 @@ def train_model(
     correct_vi = False,
     path_vi=None,
     path_masks = None,
+    reprocess = False
     ):
     """
     Uses first SENTINEL dates to train a periodic vegetation index model capable of predicting the vegetation index at any date.
@@ -91,33 +92,35 @@ def train_model(
     
     if tile.paths["coeff_model"].exists():
         print("Model already calculated")
-    else:
-        print("Computing model")
-        tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
-                            path_masks = tile.paths["MaskDir"])
-        
-        # Import des index de végétations et des masques
-        stack_vi, stack_masks = import_stackedmaskedVI(tile, max_date=max_last_date_training, chunks = 1280)
-   
-        detection_dates, first_detection_date_index = get_detection_dates(stack_masks,
-                                              min_last_date_training = min_last_date_training,
-                                              nb_min_date = nb_min_date)
-        
-        #Fusion du masque forêt et des zones non utilisables par manque de données
-        sufficient_coverage_mask = first_detection_date_index!=0
-        
-        if correct_vi:
-            stack_vi, tile.large_scale_model, tile.correction_vi = model_vi_correction(stack_vi, stack_masks, tile.paths)
+        tile.save_info()
+        return
+    print("Computing model")
+    tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
+                        path_masks = tile.paths["MaskDir"])
+    
+    # Import des index de végétations et des masques
+    stack_vi, stack_masks = import_stackedmaskedVI(tile, max_date=max_last_date_training, chunks = 1280)
 
-        # Modéliser le CRSWIR
-        stack_masks = stack_masks | detection_dates #Masking data not used in training
-        coeff_model = model_vi(stack_vi, stack_masks)
-        
-        #Ecrire rasters de l'index de la dernière date utilisée, les coefficients, la zone utilisable
-        write_tif(first_detection_date_index,tile.raster_meta["attrs"], tile.paths["first_detection_date_index"],nodata=0)
-        write_tif(coeff_model,tile.raster_meta["attrs"], tile.paths["coeff_model"])
-        write_tif(sufficient_coverage_mask,tile.raster_meta["attrs"], tile.paths["sufficient_coverage_mask"],nodata=0)
-        #Save the TileInfo object
+    detection_dates, first_detection_date_index = get_detection_dates(stack_masks,
+                                          min_last_date_training = min_last_date_training,
+                                          nb_min_date = nb_min_date)
+    
+    #Fusion du masque forêt et des zones non utilisables par manque de données
+    sufficient_coverage_mask = first_detection_date_index!=0
+    
+    if correct_vi:
+        stack_vi, tile.large_scale_model, tile.correction_vi = model_vi_correction(stack_vi, stack_masks, tile.paths)
+
+    # Modéliser le CRSWIR
+    stack_masks = stack_masks | detection_dates #Masking data not used in training
+    coeff_model = model_vi(stack_vi, stack_masks)
+    print(coeff_model)
+    
+    #Ecrire rasters de l'index de la dernière date utilisée, les coefficients, la zone utilisable
+    write_tif(first_detection_date_index,tile.raster_meta["attrs"], tile.paths["first_detection_date_index"],nodata=0)
+    write_tif(coeff_model,tile.raster_meta["attrs"], tile.paths["coeff_model"])
+    write_tif(sufficient_coverage_mask,tile.raster_meta["attrs"], tile.paths["sufficient_coverage_mask"],nodata=0)
+    #Save the TileInfo object
     tile.save_info()
 
     
