@@ -12,6 +12,7 @@ def process_dieback_wrapper(args): return process_dieback(*args)
 def process_dieback(anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode):
     dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index)
     if stress_index_mode is not None: stress_data = save_stress(stress_data, dieback_data, changing_pixels, diff_vi, mask, stress_index_mode)
+    del mask, anomalies, diff_vi, changing_pixels
     return dieback_data, stress_data
 
 def process_one_wrapper(args): return process_one(*args)
@@ -32,6 +33,8 @@ def process_one(tile, first_detection_date_index, coeff_model, date_index, date,
                                              vi = vi, path_dict_vi = path_dict_vi)
 
     write_tif(anomalies, first_detection_date_index.attrs, tile.paths["AnomaliesDir"] / str("Anomalies_" + date + ".tif"),nodata=0)
+
+    del vegetation_index, predicted_vi
     return date, (anomalies, diff_vi, mask)
 
 def dieback_loop(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress=True):

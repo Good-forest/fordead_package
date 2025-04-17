@@ -44,6 +44,7 @@ def process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source
         mask = mask | get_source_mask(tile.paths["Sentinel"][date], sentinel_source, extent = tile.raster_meta["extent"]) #Masking with source mask if option chosen
 
     write_tif(mask, tile.raster_meta["attrs"], tile.paths["MaskDir"] / ("Mask_"+date+".tif"),nodata=0)
+    del mask, stack_bands, invalid_values
 
 
 def process_one(tile, date, interpolation_order, compress_raster, compress_vi=False):
