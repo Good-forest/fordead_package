@@ -74,7 +74,8 @@ def dieback_detection(
     vi = None,
     path_dict_vi = None,
     progress=True,
-    multi_process=False
+    multi_process=False,
+    batch_size=500
     ):
     """
     Detects anomalies by comparing the vegetation index and its prediction from the model. 
@@ -135,12 +136,14 @@ def dieback_detection(
     tile.add_path("stress_index", tile.data_directory / "DataStress" / "stress_index.tif")
 
     new_dates = tile.dates[tile.dates > tile.last_computed_anomaly] if hasattr(tile, "last_computed_anomaly") else tile.dates[tile.dates >= tile.parameters["min_last_date_training"]]
+    is_last_batch = len(new_dates) <= batch_size
+    new_dates = new_dates[:batch_size]
 
-    if  len(new_dates) == 0:
+    if len(new_dates) == 0:
         print("Dieback detection : no new dates")
         tile.getdict_datepaths("Anomalies",tile.paths["AnomaliesDir"]) # Get paths and dates to previously calculated anomalies
         tile.save_info()
-        return
+        return True
 
     print("Dieback detection : " + str(len(new_dates))+ " new dates")
 
@@ -171,12 +174,12 @@ def dieback_detection(
     write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
     write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
     del dieback_data
-    
+
     if stress_index_mode is not None:
         # valid_model = import_binary_raster(tile.paths["sufficient_coverage_mask"])
         # valid_model = valid_model.where(stress_data["nb_periods"]<=max_nb_stress_periods,False)
         too_many_stress_periods_mask = stress_data["nb_periods"]<=max_nb_stress_periods
-        write_tif(too_many_stress_periods_mask, first_detection_date_index.attrs,tile.paths["too_many_stress_periods_mask"],nodata=0) 
+        write_tif(too_many_stress_periods_mask, first_detection_date_index.attrs,tile.paths["too_many_stress_periods_mask"],nodata=0)
 
         if stress_index_mode == "mean":
             stress_index = stress_data["cum_diff"]/stress_data["nb_dates"]
@@ -184,7 +187,7 @@ def dieback_detection(
             stress_index = stress_data["cum_diff"]/(stress_data["nb_dates"]*(stress_data["nb_dates"]+1)/2)
         else:
             raise Exception("Unrecognized stress_index_mode")
-               
+
         write_tif(stress_index, first_detection_date_index.attrs,tile.paths["stress_index"],nodata=0)
         del stress_index
         #Writing dieback data to rasters
@@ -196,5 +199,6 @@ def dieback_detection(
 
     tile.getdict_datepaths("Anomalies",tile.paths["AnomaliesDir"]) # Get paths and dates to previously calculated anomalies
     tile.save_info()
+    return is_last_batch
 
 
