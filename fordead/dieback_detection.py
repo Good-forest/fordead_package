@@ -77,21 +77,15 @@ def detection_dieback(dieback_data, anomalies, mask, date_index, date):
         Binary array (x,y) containing True where pixels change state is confirmed with a third successive anomaly
     """
     dieback_data["count"] = xr.where(~mask & (anomalies != dieback_data["state"]), dieback_data["count"] + 1 , dieback_data["count"])
-    # 2. Sinon count = 0
     dieback_data["count"] = xr.where(~mask & (anomalies == dieback_data["state"]), 0, dieback_data["count"])
 
-
     delay_since_first_date_unconfirmed = (date - dieback_data["first_date_unconfirmed_date"]) / 86400
-    print(delay_since_first_date_unconfirmed)
-    # print unique values of delay_since_first_date_unconfirmed
-    unique = np.unique(delay_since_first_date_unconfirmed)
-    print(unique)
-    delay_more_than_30_days = delay_since_first_date_unconfirmed > 30
-    last_duration_less_than_90_days = dieback_data["last_duration"] < 90
-    changing_pixels = (dieback_data["count"] == 3) & (
-        (dieback_data["state"] != True) |
-        (delay_more_than_30_days & last_duration_less_than_90_days)
-    )
+    # delay_more_than_30_days = delay_since_first_date_unconfirmed > 30
+    # last_duration_less_than_90_days = dieback_data["last_duration"] < 90
+    # changing_pixels = (dieback_data["count"] == 3) & (
+    #     (dieback_data["state"] != True) |
+    #     (delay_more_than_30_days & last_duration_less_than_90_days)
+    # )
     changing_pixels = (dieback_data["count"] == 3) | ((dieback_data["count"] == 2) & (dieback_data["state"] == False) & (delay_since_first_date_unconfirmed > 15))
     # changing_pixels = dieback_data["count"] == 3
 
