@@ -1,4 +1,6 @@
 from tqdm import tqdm
+import numpy as np
+from datetime import datetime
 import multiprocessing
 
 from fordead.import_data import import_coeff_model, import_dieback_data, import_stress_data, initialize_dieback_data, initialize_stress_data, import_masked_vi, import_first_detection_date_index, TileInfo, import_binary_raster
@@ -9,8 +11,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def process_dieback_wrapper(args): return process_dieback(*args)
 
-def process_dieback(anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode):
-    dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index)
+def process_dieback(anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode, date):
+    datetime_64_date = np.datetime64(date, 's')
+    dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index, datetime_64_date)
     if stress_index_mode is not None: stress_data = save_stress(stress_data, dieback_data, changing_pixels, diff_vi, mask, stress_index_mode)
     del mask, anomalies, diff_vi, changing_pixels
     return dieback_data, stress_data
@@ -41,7 +44,7 @@ def dieback_loop(tile, first_detection_date_index, coeff_model, new_dates, fores
     for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if not date in new_dates: continue
         date, (anomalies, diff_vi, mask) = process_one(tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi)
-        dieback_data, stress_data = process_dieback_wrapper((anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode))
+        dieback_data, stress_data = process_dieback_wrapper((anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode, date))
     return dieback_data, stress_data
 
 def dieback_multithread(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress=True):
@@ -130,6 +133,7 @@ def dieback_detection(
     tile.add_path("state_dieback", tile.data_directory / "DataDieback" / "state_dieback.tif")
     tile.add_path("first_date_dieback", tile.data_directory / "DataDieback" / "first_date_dieback.tif")
     tile.add_path("first_date_unconfirmed_dieback", tile.data_directory / "DataDieback" / "first_date_unconfirmed_dieback.tif")
+    tile.add_path("first_date_unconfirmed_date_dieback", tile.data_directory / "DataDieback" / "first_date_unconfirmed_date_dieback.tif")
     tile.add_path("count_dieback", tile.data_directory / "DataDieback" / "count_dieback.tif")
     tile.add_path("last_duration_dieback", tile.data_directory / "DataDieback" / "last_duration_dieback.tif")
     
@@ -176,6 +180,7 @@ def dieback_detection(
     write_tif(dieback_data["state"], first_detection_date_index.attrs,tile.paths["state_dieback"],nodata=0)
     write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
     write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
+    write_tif(dieback_data["first_date_unconfirmed_date"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_date_dieback"])
     write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
     write_tif(dieback_data["last_duration"], first_detection_date_index.attrs,tile.paths["last_duration_dieback"],nodata=0)
     del dieback_data
