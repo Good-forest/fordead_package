@@ -959,16 +959,15 @@ def initialize_dieback_data(shape,coords):
     """
 
     zeros_array= np.zeros(shape,dtype=np.uint8) #np.int8 possible ?
-    datetime_array= np.zeros(shape,dtype="datetime64[D]")
 
 
     dieback_data= xr.Dataset({
         "state": xr.DataArray(zeros_array.astype(bool), coords=coords),
         "first_date": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
         "first_date_unconfirmed": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
-        "first_date_unconfirmed_date": xr.DataArray(datetime_array, coords=coords),
+        "first_date_unconfirmed_date": xr.DataArray(zeros_array.astype(np.float64), coords=coords),
         "count" : xr.DataArray(zeros_array, coords=coords),
-        "last_duration" : xr.DataArray(zeros_array.astype(np.uint16), coords=coords)
+        "last_duration" : xr.DataArray(zeros_array.astype(np.float64), coords=coords)
     })
     return dieback_data
 

@@ -76,20 +76,24 @@ def detection_dieback(dieback_data, anomalies, mask, date_index, date):
     changing_pixels : DataArray
         Binary array (x,y) containing True where pixels change state is confirmed with a third successive anomaly
     """
-    # dieback_data["count"] = xr.where(~mask & (anomalies != dieback_data["state"]) & dieback_data["count"] + 1, dieback_data["count"] + 1 , dieback_data["count"])
-    # 1. Si anomalies différent de state, count = count + 1
     dieback_data["count"] = xr.where(~mask & (anomalies != dieback_data["state"]), dieback_data["count"] + 1 , dieback_data["count"])
     # 2. Sinon count = 0
     dieback_data["count"] = xr.where(~mask & (anomalies == dieback_data["state"]), 0, dieback_data["count"])
-    # 3. changing_pixels = True si CompteurScolyte == 3
-    delay_since_first_date_unconfirmed = (date - dieback_data["first_date_unconfirmed_date"])
+
+
+    delay_since_first_date_unconfirmed = (date - dieback_data["first_date_unconfirmed_date"]) / 86400
+    print(delay_since_first_date_unconfirmed)
+    # print unique values of delay_since_first_date_unconfirmed
+    unique = np.unique(delay_since_first_date_unconfirmed)
+    print(unique)
     delay_more_than_30_days = delay_since_first_date_unconfirmed > 30
     last_duration_less_than_90_days = dieback_data["last_duration"] < 90
     changing_pixels = (dieback_data["count"] == 3) & (
         (dieback_data["state"] != True) |
         (delay_more_than_30_days & last_duration_less_than_90_days)
     )
-    changing_pixels = dieback_data["count"] == 3
+    changing_pixels = (dieback_data["count"] == 3) | ((dieback_data["count"] == 2) & (dieback_data["state"] == False) & (delay_since_first_date_unconfirmed > 15))
+    # changing_pixels = dieback_data["count"] == 3
 
     #4. State = ~State si Changement de pixel
     dieback_data["state"] = xr.where(changing_pixels, ~dieback_data["state"], dieback_data["state"])
@@ -100,17 +104,13 @@ def detection_dieback(dieback_data, anomalies, mask, date_index, date):
     # 6. count = 0 si changement de pixel
     dieback_data["count"] = xr.where(changing_pixels, 0, dieback_data["count"])
 
-    epoch = np.datetime64("1970-01-01", 's')
+    epoch = np.datetime64("1970-01-01", 's').astype(float)
     dieback_data["last_duration"] = xr.where(~mask & (dieback_data["count"] == 1) & (dieback_data["first_date_unconfirmed_date"] > epoch), dieback_data["first_date_unconfirmed_date"] - date, dieback_data["last_duration"])
 
     # 7. first_date_unconfirmed = date_index si premiere anomalie
     dieback_data["first_date_unconfirmed"] = xr.where(~mask & (dieback_data["count"] == 1), date_index, dieback_data["first_date_unconfirmed"])
 
     dieback_data["first_date_unconfirmed_date"] = xr.where(~mask & (dieback_data["count"] == 1), date, dieback_data["first_date_unconfirmed_date"])
-    # print each value of unconfirmed_date
-    for i in range(dieback_data["first_date_unconfirmed_date"].shape[0]):
-        for j in range(dieback_data["first_date_unconfirmed_date"].shape[1]):
-            print(dieback_data["first_date_unconfirmed_date"][i,j])
 
     return dieback_data,changing_pixels
 

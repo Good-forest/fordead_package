@@ -12,8 +12,8 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 def process_dieback_wrapper(args): return process_dieback(*args)
 
 def process_dieback(anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode, date):
-    datetime_64_date = np.datetime64(date, 's')
-    dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index, datetime_64_date)
+    datetime_64_float = np.datetime64(date, 's').astype(float)
+    dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index, datetime_64_float)
     if stress_index_mode is not None: stress_data = save_stress(stress_data, dieback_data, changing_pixels, diff_vi, mask, stress_index_mode)
     del mask, anomalies, diff_vi, changing_pixels
     return dieback_data, stress_data
@@ -180,9 +180,15 @@ def dieback_detection(
     write_tif(dieback_data["state"], first_detection_date_index.attrs,tile.paths["state_dieback"],nodata=0)
     write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
     write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
-    write_tif(dieback_data["first_date_unconfirmed_date"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_date_dieback"])
     write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
-    write_tif(dieback_data["last_duration"], first_detection_date_index.attrs,tile.paths["last_duration_dieback"],nodata=0)
+
+    dieback_data["first_date_unconfirmed_date"] = dieback_data["first_date_unconfirmed_date"].astype('timedelta64[s]').astype(np.float64)
+    write_tif(dieback_data["first_date_unconfirmed_date"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_date_dieback"], nodata=0)
+
+    dieback_data["last_duration"] = dieback_data["last_duration"].astype('timedelta64[s]').astype(np.float64)
+
+    write_tif(dieback_data["last_duration"], first_detection_date_index.attrs,tile.paths["last_duration_dieback"], nodata=0)
+
     del dieback_data
 
     if stress_index_mode is not None:
