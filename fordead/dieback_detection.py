@@ -75,15 +75,34 @@ def detection_dieback(dieback_data, anomalies, mask, date_index):
     changing_pixels : DataArray
         Binary array (x,y) containing True where pixels change state is confirmed with a third successive anomaly
     """
+    # dieback_data["count"] = xr.where(~mask & (anomalies != dieback_data["state"]) & dieback_data["count"] + 1, dieback_data["count"] + 1 , dieback_data["count"])
+    # 1. Si anomalies différent de state, count = count + 1
+    dieback_data["count"] = xr.where(~mask & (anomalies != dieback_data["state"]), dieback_data["count"] + 1 , dieback_data["count"])
+    # 2. Sinon count = 0
+    dieback_data["count"] = xr.where(~mask & (anomalies == dieback_data["state"]), 0, dieback_data["count"])
+    # 3. changing_pixels = True si CompteurScolyte == 3
+    delay_since_first_date_unconfirmed = (date_index - dieback_data["first_date_unconfirmed"])
+    delay_more_than_30_days = delay_since_first_date_unconfirmed > 30
+    last_duration_less_than_90_days = dieback_data["last_duration"] < 90
+    changing_pixels = (dieback_data["count"] == 3) & (
+        (dieback_data["state"] != True) |
+        (delay_more_than_30_days & last_duration_less_than_90_days)
+    )
+    changing_pixels = dieback_data["count"] == 3
 
-    dieback_data["count"] = xr.where(~mask & (anomalies!=dieback_data["state"]),dieback_data["count"]+1,dieback_data["count"])
-    dieback_data["count"] = xr.where(~mask & (anomalies==dieback_data["state"]),0,dieback_data["count"])
-    changing_pixels = dieback_data["count"]==3
+    #4. State = ~State si Changement de pixel
+    dieback_data["state"] = xr.where(changing_pixels, ~dieback_data["state"], dieback_data["state"])
 
-    dieback_data["state"] = xr.where(changing_pixels, ~dieback_data["state"], dieback_data["state"]) #Changement d'état si CompteurScolyte = 3 et date valide
-    dieback_data["first_date"] = dieback_data["first_date"].where(~changing_pixels,dieback_data["first_date_unconfirmed"])
-    dieback_data["count"] = xr.where(changing_pixels, 0,dieback_data["count"])
-    dieback_data["first_date_unconfirmed"]=xr.where(~mask & (dieback_data["count"]==1), date_index, dieback_data["first_date_unconfirmed"]) #Garde la première date de détection de scolyte sauf si déjà détécté comme scolyte
+    #5. first_date = first_date_unconfirmed si Changement de pixel
+    dieback_data["first_date"] = dieback_data["first_date"].where(~changing_pixels, dieback_data["first_date_unconfirmed"])
+
+    # 6. count = 0 si changement de pixel
+    dieback_data["count"] = xr.where(changing_pixels, 0, dieback_data["count"])
+
+    dieback_data["last_duration"] = xr.where(~mask & (dieback_data["count"] == 1) & dieback_data["first_date_unconfirmed"] > 0, dieback_data["first_date_unconfirmed"] - date_index, dieback_data["last_duration"])
+
+    # 7. first_date_unconfirmed = date_index si premiere anomalie
+    dieback_data["first_date_unconfirmed"] = xr.where(~mask & (dieback_data["count"] == 1), date_index, dieback_data["first_date_unconfirmed"])
 
     return dieback_data,changing_pixels
 

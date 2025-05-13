@@ -131,6 +131,7 @@ def dieback_detection(
     tile.add_path("first_date_dieback", tile.data_directory / "DataDieback" / "first_date_dieback.tif")
     tile.add_path("first_date_unconfirmed_dieback", tile.data_directory / "DataDieback" / "first_date_unconfirmed_dieback.tif")
     tile.add_path("count_dieback", tile.data_directory / "DataDieback" / "count_dieback.tif")
+    tile.add_path("last_duration_dieback", tile.data_directory / "DataDieback" / "last_duration_dieback.tif")
     
     tile.add_path("dates_stress", tile.data_directory / "DataStress" / "dates_stress.tif")
     tile.add_path("nb_periods_stress", tile.data_directory / "DataStress" / "nb_periods_stress.tif")
@@ -176,6 +177,7 @@ def dieback_detection(
     write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
     write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
     write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
+    write_tif(dieback_data["last_duration"], first_detection_date_index.attrs,tile.paths["last_duration_dieback"],nodata=0)
     del dieback_data
 
     if stress_index_mode is not None:

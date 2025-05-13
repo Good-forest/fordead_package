@@ -853,11 +853,15 @@ def import_dieback_data(dict_paths, chunks = None):
     first_date_dieback = rioxarray.open_rasterio(dict_paths["first_date_dieback"],chunks = chunks)
     first_date_unconfirmed_dieback = rioxarray.open_rasterio(dict_paths["first_date_unconfirmed_dieback"],chunks = chunks)
     count_dieback = rioxarray.open_rasterio(dict_paths["count_dieback"],chunks = chunks)
+    last_duration = rioxarray.open_rasterio(dict_paths["last_duration_dieback"],chunks = chunks)
     
     dieback_data=xr.Dataset({"state": state_dieback,
                      "first_date": first_date_dieback,
                      "first_date_unconfirmed" : first_date_unconfirmed_dieback,
-                     "count" : count_dieback})
+                     "count" : count_dieback,
+                             "last_duration" : last_duration
+
+                             })
     dieback_data=dieback_data.squeeze("band")
     dieback_data.load()
 
@@ -955,10 +959,13 @@ def initialize_dieback_data(shape,coords):
     zeros_array= np.zeros(shape,dtype=np.uint8) #np.int8 possible ?
     
 
-    dieback_data=xr.Dataset({"state": xr.DataArray(zeros_array.astype(bool), coords=coords),
-                         "first_date": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
-                         "first_date_unconfirmed": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
-                         "count" : xr.DataArray(zeros_array, coords=coords)})
+    dieback_data= xr.Dataset({
+        "state": xr.DataArray(zeros_array.astype(bool), coords=coords),
+        "first_date": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
+        "first_date_unconfirmed": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
+        "count" : xr.DataArray(zeros_array, coords=coords),
+        "last_duration" : xr.DataArray(zeros_array.astype(np.uint16), coords=coords)
+    })
     return dieback_data
 
 
