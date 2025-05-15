@@ -80,14 +80,17 @@ def detection_dieback(dieback_data, anomalies, mask, date_index, date):
     dieback_data["count"] = xr.where(~mask & (anomalies == dieback_data["state"]), 0, dieback_data["count"])
 
     delay_since_first_date_unconfirmed = (date - dieback_data["first_date_unconfirmed_date"]) / 86400
-    # delay_more_than_30_days = delay_since_first_date_unconfirmed > 30
-    # last_duration_less_than_90_days = dieback_data["last_duration"] < 90
+
+    delay_more_than_30_days = delay_since_first_date_unconfirmed > 30
+    last_duration_less_than_90_days = (dieback_data["last_duration"] / 86400) < 90
+
+    changing_pixels = dieback_data["count"] == 3
     # changing_pixels = (dieback_data["count"] == 3) & (
     #     (dieback_data["state"] != True) |
     #     (delay_more_than_30_days & last_duration_less_than_90_days)
     # )
-    changing_pixels = (dieback_data["count"] == 3) | ((dieback_data["count"] == 2) & (dieback_data["state"] == False) & (delay_since_first_date_unconfirmed > 15))
-    # changing_pixels = dieback_data["count"] == 3
+    changing_pixels = changing_pixels | ((dieback_data["count"] == 2) & (dieback_data["state"] == False) & (delay_since_first_date_unconfirmed > 15))
+
 
     #4. State = ~State si Changement de pixel
     dieback_data["state"] = xr.where(changing_pixels, ~dieback_data["state"], dieback_data["state"])
@@ -99,7 +102,7 @@ def detection_dieback(dieback_data, anomalies, mask, date_index, date):
     dieback_data["count"] = xr.where(changing_pixels, 0, dieback_data["count"])
 
     epoch = np.datetime64("1970-01-01", 's').astype(float)
-    dieback_data["last_duration"] = xr.where(~mask & (dieback_data["count"] == 1) & (dieback_data["first_date_unconfirmed_date"] > epoch), dieback_data["first_date_unconfirmed_date"] - date, dieback_data["last_duration"])
+    dieback_data["last_duration"] = xr.where(~mask & (dieback_data["count"] == 1) & (dieback_data["first_date_unconfirmed_date"] > epoch), date - dieback_data["first_date_unconfirmed_date"], dieback_data["last_duration"])
 
     # 7. first_date_unconfirmed = date_index si premiere anomalie
     dieback_data["first_date_unconfirmed"] = xr.where(~mask & (dieback_data["count"] == 1), date_index, dieback_data["first_date_unconfirmed"])

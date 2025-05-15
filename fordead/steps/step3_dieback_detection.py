@@ -12,7 +12,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 def process_dieback_wrapper(args): return process_dieback(*args)
 
 def process_dieback(anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode, date):
-    datetime_64_float = np.datetime64(date, 's').astype(float)
+    datetime_64_float = np.datetime64(date, 's').astype(np.float64)
     dieback_data, changing_pixels = detection_dieback(dieback_data, anomalies, mask, date_index, datetime_64_float)
     if stress_index_mode is not None: stress_data = save_stress(stress_data, dieback_data, changing_pixels, diff_vi, mask, stress_index_mode)
     del mask, anomalies, diff_vi, changing_pixels
