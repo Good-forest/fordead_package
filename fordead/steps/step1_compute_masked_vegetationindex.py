@@ -205,14 +205,20 @@ def compute_masked_vegetationindex(
         return
     print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
 
-    #Import or initialize data for the soil mask
+    tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
+
+    date = new_dates[0]
+    stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
+
+#Import or initialize data for the soil mask
     if soil_detection:
         if tile.paths["state_soil"].exists():
             soil_data = import_soil_data(tile.paths)
         else:
-            soil_data = initialize_soil_data(tile.raster_meta["shape"],tile.raster_meta["coords"])
+            shape = stack_bands[0].shape
+            coords = stack_bands[0].coords
+            soil_data = initialize_soil_data(shape,coords)
 
-    tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
 
     f = process_batch_loop
     if multi_process:
