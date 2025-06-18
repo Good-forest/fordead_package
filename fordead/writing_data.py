@@ -185,16 +185,6 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
 
     """
     
-
-#     geoms_period_index = list(
-#                 {'properties': {'period_index': v}, 'geometry': s}
-#                 for i, (s, v)
-#                 in enumerate(
-#                     rasterio.features.shapes(inds_soil.astype("uint16"), mask
-#  =  (relevant_area & (inds_soil!=0) & (inds_soil!=len(bins_as_date))).compute(
-# ).data , transform=relevant_area.rio.transform()))) #Affine(*attrs["transform"])
-
-
     np.set_printoptions(threshold=np.inf)
     debug = False
 
@@ -202,7 +192,6 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
     inds_soil_confirmed = inds_soil
     if bins_as_confirmed is not None:
         debug = True
-        print("bins_as_confirmed not None" )
         inds_soil_confirmed = np.digitize(bins_as_confirmed, bins_as_datenumber, right = True)
     mask = (relevant_area & (inds_soil != 0) &
             (inds_soil != len(bins_as_date))).compute().data
@@ -231,34 +220,10 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
 
     for feature, stat in zip(features, stats):
         feature['properties']['confirmed_period_index'] = stat.get('majority', None)
-    print(features)
-        #     geoms_period_index_confirmed = list(
-#                 {'properties': {'period_index': v}, 'geometry': s}
-#                 for i, (s, v)
-#                 in enumerate(
-#                     rasterio.features.shapes(inds_soil_confirmed.astype("uint16"), mask
-#  =  (relevant_area & (inds_soil!=0) & (inds_soil!=len(bins_as_date))).compute(
-# ).data , transform=relevant_area.rio.transform()))) #Affine(*attrs["transform"])
-#     merged_features = []
-#     z = zip(geoms_period_index, geoms_period_index_confirmed)
-#     print(len(geoms_period_index),len(geoms_period_index_confirmed))
-#     for i, (f1, f2) in enumerate(z):
-#         print(i)
-#         assert f1["geometry"] == f2["geometry"], "Geometries do not match!"
-#
-#         merged_feature = {
-#             "geometry": f1["geometry"],
-#             "properties": {
-#                 "period_index": f1["properties"]["period_index"],
-#                 "confirmed_period_index": int(f2["properties"]["period_index"]),
-#             }
-#         }
-#         merged_features.append(merged_feature)
+        feature['properties']['delta_period'] = stat.get('majority', None) - feature['properties']['period_index']
 
-    # print(geoms_period_index)
-    print("==================")
-    # gp_results = gp.GeoDataFrame.from_features(geoms_period_index)
     gp_results = gp.GeoDataFrame.from_features(features)
+    print(np.unique(gp_results["delta_period"],return_counts=True))
     if debug:
         print(gp_results.head(10))
 
@@ -268,7 +233,6 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
             #If you want to reactivate start and end columns
         # gp_results.insert(0,"start",(bins_as_date[gp_results.period_index-1] + pd.DateOffset(1)).strftime('%Y-%m-%d'))
         # gp_results.insert(1,"end",(bins_as_date[gp_results.period_index]).strftime('%Y-%m-%d'))
-        # gp_results.insert(0,"period", (gp_results["start"] + " - " + gp_results["end"]))
             #If you only want period column
         gp_results.insert(0,"period", ((bins_as_date[gp_results.period_index-1] + pd.DateOffset(1)).strftime('%Y-%m-%d') + " - " + (bins_as_date[gp_results.period_index]).strftime('%Y-%m-%d')))
         gp_results.insert(0, "first_date_confirmed", ((bins_as_date[gp_results.confirmed_period_index - 1]).strftime('%Y-%m-%d')))
