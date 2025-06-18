@@ -387,7 +387,7 @@ def extract_points(x, df, **kwargs):
     points = x.sel(coords.to_xarray(), **kwargs)
     return points
 
-# add XL
+# add XL - dates suppressed
 def extract_raster_values(
         tile_coll, points, bands_to_extract=None, extracted_reflectance=None,
         export_path=None, chunksize=512, by_chunk=True, dropna=True, dtype=int):
@@ -456,13 +456,14 @@ def extract_raster_values(
         points = points.to_crs(arr.rio.crs)
     
     # Add XL - pb with intersection, did not find points - commented    
-    # # keep only points inside array bounding box
-    # bbox = gpd.GeoSeries(box(*arr.rio.bounds()), crs=arr.rio.crs)
-    # # makes a copy of points by the way
-    # points = points.loc[points.intersects(bbox)]
-    # if len(points) == 0:
-    #     print("No points inside array bounding box.")
-    #     return
+    # keep only points inside array bounding box
+    bbox = gpd.GeoSeries(box(*arr.rio.bounds()), crs=arr.rio.crs)
+    print('Bbox tile collection : ',bbox) # Add XL
+    # makes a copy of points by the way
+    points = points.loc[points.intersects(bbox)]
+    if len(points) == 0:
+        print("No points inside array bounding box.")
+        return
 
 
     if by_chunk:
@@ -505,10 +506,13 @@ def extract_raster_values(
             print(f"elapsed time {round(time()-start, 2)}s")
             if res is not None:
                 res_list.append(res)
+
+
         if export_path is None:
             if len(res_list) > 0:
                 return pd.concat(res_list, ignore_index=True)
-        return    
+        return
+        
     
     # choosing a random name for the index
     point_index = "".join(random.sample(string.ascii_letters, 10))

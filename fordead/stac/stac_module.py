@@ -505,8 +505,9 @@ def get_tile_collection(tile, include_s2=False):
             "bbox": bbox_wgs,
             "properties": {"proj:epsg": epsg,},
             "assets": assets,
-            "stac_extensions": [pystac.extensions.projection.SCHEMA_URI,
-                                pystac.extensions.raster.SCHEMA_URI],
+            # Add XL - pb with Stac schema
+            #"stac_extensions": [pystac.extensions.projection.SCHEMA_URI,
+            #                    pystac.extensions.raster.SCHEMA_URI],
             }
         item = pystac.Item(**item_info)
         item.validate()
