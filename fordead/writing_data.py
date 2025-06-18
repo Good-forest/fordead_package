@@ -224,6 +224,7 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
 
     gp_results = gp.GeoDataFrame.from_features(features)
     print(np.unique(gp_results["delta_period"],return_counts=True))
+
     if debug:
         print(gp_results.head(10))
 
@@ -308,6 +309,7 @@ def vectorizing_confidence_class(confidence_index, nb_dates, relevant_area, bins
     """
 
     digitized = np.digitize(confidence_index, bins_classes)  
+    # XL: cette condition force les anomalies avec uniquement 3 jours consécutifs à un CI = 0, donc a priori une anomalie faible
     # digitized[nb_dates.data==3]=0
     geoms_class = list(
                 {'properties': {'class_index': v}, 'geometry': s}
