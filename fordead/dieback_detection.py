@@ -82,6 +82,7 @@ def detection_dieback(dieback_data, anomalies, mask, date_index):
 
     dieback_data["state"] = xr.where(changing_pixels, ~dieback_data["state"], dieback_data["state"]) #Changement d'état si CompteurScolyte = 3 et date valide
     dieback_data["first_date"] = dieback_data["first_date"].where(~changing_pixels,dieback_data["first_date_unconfirmed"])
+    dieback_data["first_date_confirmed"] = dieback_data["first_date_confirmed"].where(~changing_pixels,date_index)
     dieback_data["count"] = xr.where(changing_pixels, 0,dieback_data["count"])
     dieback_data["first_date_unconfirmed"]=xr.where(~mask & (dieback_data["count"]==1), date_index, dieback_data["first_date_unconfirmed"]) #Garde la première date de détection de scolyte sauf si déjà détécté comme scolyte
 

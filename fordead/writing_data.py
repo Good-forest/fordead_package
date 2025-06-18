@@ -159,7 +159,9 @@ def convert_dateindex_to_datenumber(date_array, mask_array, dates):
     return results_date_number
 
 
-def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_datenumber, relevant_area, attrs):
+
+from rasterstats import zonal_stats
+def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_datenumber, relevant_area, attrs, bins_as_confirmed=None):
     """
     Aggregates pixels in array containing dates, based on the period they fall into, then vectorizes results masking dates oustide the bins.
 
@@ -183,30 +185,96 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
 
     """
     
+
+#     geoms_period_index = list(
+#                 {'properties': {'period_index': v}, 'geometry': s}
+#                 for i, (s, v)
+#                 in enumerate(
+#                     rasterio.features.shapes(inds_soil.astype("uint16"), mask
+#  =  (relevant_area & (inds_soil!=0) & (inds_soil!=len(bins_as_date))).compute(
+# ).data , transform=relevant_area.rio.transform()))) #Affine(*attrs["transform"])
+
+
+    np.set_printoptions(threshold=np.inf)
+    debug = False
+
     inds_soil = np.digitize(first_date_number, bins_as_datenumber, right = True)
-    # geoms_period_index = list(
-    #             {'properties': {'period_index': v}, 'geometry': s}
-    #             for i, (s, v) 
-    #             in enumerate(
-    #                 rasterio.features.shapes(inds_soil.astype("uint16"), mask =  (relevant_area & (inds_soil!=0) &  (inds_soil!=len(bins_as_date))).data , transform=Affine(*attrs["transform"]))))
-    geoms_period_index = list(
-                {'properties': {'period_index': v}, 'geometry': s}
-                for i, (s, v) 
-                in enumerate(
-                    rasterio.features.shapes(inds_soil.astype("uint16"), mask =  (relevant_area & (inds_soil!=0) & (inds_soil!=len(bins_as_date))).compute().data , transform=relevant_area.rio.transform()))) #Affine(*attrs["transform"])
-    gp_results = gp.GeoDataFrame.from_features(geoms_period_index)
+    inds_soil_confirmed = inds_soil
+    if bins_as_confirmed is not None:
+        debug = True
+        print("bins_as_confirmed not None" )
+        inds_soil_confirmed = np.digitize(bins_as_confirmed, bins_as_datenumber, right = True)
+    mask = (relevant_area & (inds_soil != 0) &
+            (inds_soil != len(bins_as_date))).compute().data
+
+    shapes_gen = rasterio.features.shapes(
+        inds_soil.astype("uint16"),
+        mask=mask,
+        transform=relevant_area.rio.transform()
+    )
+
+    features = [
+        {
+            "type": "Feature",
+            "geometry": geom,
+            "properties": {"period_index": int(v)}
+        }
+        for geom, v in shapes_gen
+    ]
+
+    stats = zonal_stats(
+        features,
+        inds_soil_confirmed,
+        affine=relevant_area.rio.transform(),
+        stats=['majority']
+    )
+
+    for feature, stat in zip(features, stats):
+        feature['properties']['confirmed_period_index'] = stat.get('majority', None)
+    print(features)
+        #     geoms_period_index_confirmed = list(
+#                 {'properties': {'period_index': v}, 'geometry': s}
+#                 for i, (s, v)
+#                 in enumerate(
+#                     rasterio.features.shapes(inds_soil_confirmed.astype("uint16"), mask
+#  =  (relevant_area & (inds_soil!=0) & (inds_soil!=len(bins_as_date))).compute(
+# ).data , transform=relevant_area.rio.transform()))) #Affine(*attrs["transform"])
+#     merged_features = []
+#     z = zip(geoms_period_index, geoms_period_index_confirmed)
+#     print(len(geoms_period_index),len(geoms_period_index_confirmed))
+#     for i, (f1, f2) in enumerate(z):
+#         print(i)
+#         assert f1["geometry"] == f2["geometry"], "Geometries do not match!"
+#
+#         merged_feature = {
+#             "geometry": f1["geometry"],
+#             "properties": {
+#                 "period_index": f1["properties"]["period_index"],
+#                 "confirmed_period_index": int(f2["properties"]["period_index"]),
+#             }
+#         }
+#         merged_features.append(merged_feature)
+
+    # print(geoms_period_index)
+    print("==================")
+    # gp_results = gp.GeoDataFrame.from_features(geoms_period_index)
+    gp_results = gp.GeoDataFrame.from_features(features)
+    if debug:
+        print(gp_results.head(10))
 
     if gp_results.size != 0:
         gp_results.period_index=gp_results.period_index.astype(int)
+        gp_results.confirmed_period_index=gp_results.confirmed_period_index.astype(int)
             #If you want to reactivate start and end columns
         # gp_results.insert(0,"start",(bins_as_date[gp_results.period_index-1] + pd.DateOffset(1)).strftime('%Y-%m-%d'))
         # gp_results.insert(1,"end",(bins_as_date[gp_results.period_index]).strftime('%Y-%m-%d'))
         # gp_results.insert(0,"period", (gp_results["start"] + " - " + gp_results["end"]))
             #If you only want period column
         gp_results.insert(0,"period", ((bins_as_date[gp_results.period_index-1] + pd.DateOffset(1)).strftime('%Y-%m-%d') + " - " + (bins_as_date[gp_results.period_index]).strftime('%Y-%m-%d')))
+        gp_results.insert(0, "first_date_confirmed", ((bins_as_date[gp_results.confirmed_period_index - 1]).strftime('%Y-%m-%d')))
         ###############
         gp_results.crs = relevant_area.rio.crs #attrs["crs"].replace("+init=","")
-        gp_results = gp_results.drop(columns=['period_index'])
+        # gp_results = gp_results.drop(columns=['period_index'])
     else:
         print("No detection in this area")
 
