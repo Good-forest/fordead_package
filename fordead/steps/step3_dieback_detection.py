@@ -132,6 +132,7 @@ def dieback_detection(
     
     tile.add_path("state_dieback", tile.data_directory / "DataDieback" / "state_dieback.tif")
     tile.add_path("first_date_dieback", tile.data_directory / "DataDieback" / "first_date_dieback.tif")
+    tile.add_path("first_date_confirmed_dieback", tile.data_directory / "DataDieback" / "first_date_confirmed_dieback.tif")
     tile.add_path("first_date_unconfirmed_dieback", tile.data_directory / "DataDieback" / "first_date_unconfirmed_dieback.tif")
     tile.add_path("first_date_unconfirmed_date_dieback", tile.data_directory / "DataDieback" / "first_date_unconfirmed_date_dieback.tif")
     tile.add_path("count_dieback", tile.data_directory / "DataDieback" / "count_dieback.tif")
@@ -179,6 +180,7 @@ def dieback_detection(
 
     write_tif(dieback_data["state"], first_detection_date_index.attrs,tile.paths["state_dieback"],nodata=0)
     write_tif(dieback_data["first_date"], first_detection_date_index.attrs,tile.paths["first_date_dieback"],nodata=0)
+    write_tif(dieback_data["first_date_confirmed"], first_detection_date_index.attrs,tile.paths["first_date_confirmed_dieback"],nodata=0)
     write_tif(dieback_data["first_date_unconfirmed"], first_detection_date_index.attrs,tile.paths["first_date_unconfirmed_dieback"],nodata=0)
     write_tif(dieback_data["count"], first_detection_date_index.attrs,tile.paths["count_dieback"],nodata=0)
 

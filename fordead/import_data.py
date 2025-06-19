@@ -855,10 +855,13 @@ def import_dieback_data(dict_paths, chunks = None):
     count_dieback = rioxarray.open_rasterio(dict_paths["count_dieback"],chunks = chunks)
     last_duration = rioxarray.open_rasterio(dict_paths["last_duration_dieback"],chunks = chunks)
     first_date_unconfirmed_date_dieback = rioxarray.open_rasterio(dict_paths["first_date_unconfirmed_date_dieback"],chunks = chunks)
-    
+    first_date_confirmed = rioxarray.open_rasterio(dict_paths["first_date_confirmed_dieback"],chunks = chunks)
+
+
     dieback_data=xr.Dataset({
         "state": state_dieback,
         "first_date": first_date_dieback,
+                             "first_date_confirmed": first_date_confirmed,
         "first_date_unconfirmed" : first_date_unconfirmed_dieback,
         "first_date_unconfirmed_date" : first_date_unconfirmed_date_dieback,
         "count" : count_dieback,
@@ -964,6 +967,7 @@ def initialize_dieback_data(shape,coords):
     dieback_data= xr.Dataset({
         "state": xr.DataArray(zeros_array.astype(bool), coords=coords),
         "first_date": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
+                                 "first_date_confirmed": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
         "first_date_unconfirmed": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
         "first_date_unconfirmed_date": xr.DataArray(zeros_array.astype(np.float64), coords=coords),
         "count" : xr.DataArray(zeros_array, coords=coords),
