@@ -236,7 +236,7 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
         # gp_results.insert(1,"end",(bins_as_date[gp_results.period_index]).strftime('%Y-%m-%d'))
             #If you only want period column
         gp_results.insert(0,"period", ((bins_as_date[gp_results.period_index-1] + pd.DateOffset(1)).strftime('%Y-%m-%d') + " - " + (bins_as_date[gp_results.period_index]).strftime('%Y-%m-%d')))
-        gp_results.insert(0, "first_date_confirmed", ((bins_as_date[gp_results.confirmed_period_index - 1]).strftime('%Y-%m-%d')))
+        gp_results.insert(0, "first_date_confirmed", ((bins_as_date[gp_results.confirmed_period_index]).strftime('%Y-%m-%d')))
         ###############
         gp_results.crs = relevant_area.rio.crs #attrs["crs"].replace("+init=","")
         # gp_results = gp_results.drop(columns=['period_index'])
