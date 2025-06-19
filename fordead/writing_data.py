@@ -276,7 +276,7 @@ def vectorizing_confidence_class(confidence_index, nb_dates, relevant_area, bins
     """
 
     digitized = np.digitize(confidence_index, bins_classes)  
-    digitized[nb_dates.data==3]=0
+    # digitized[nb_dates.data==3]=0
     geoms_class = list(
                 {'properties': {'class_index': v}, 'geometry': s}
                 for i, (s, v) 
