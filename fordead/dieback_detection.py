@@ -81,7 +81,6 @@ def detection_dieback(dieback_data, anomalies, mask, date_index, date):
 
     delay_since_first_date_unconfirmed = (date - dieback_data["first_date_unconfirmed_date"]) / 86400
 
-    delay_more_than_30_days = delay_since_first_date_unconfirmed > 30
     last_duration_less_than_90_days = (dieback_data["last_duration"] / 86400) < 90
 
     changing_pixels = dieback_data["count"] == 3
@@ -89,8 +88,8 @@ def detection_dieback(dieback_data, anomalies, mask, date_index, date):
     #     (dieback_data["state"] != True) |
     #     (delay_more_than_30_days & last_duration_less_than_90_days)
     # )
-    changing_pixels = changing_pixels | ((dieback_data["count"] == 2) & (dieback_data["state"] == False) & (delay_since_first_date_unconfirmed > 15))
-
+    gf_condition = ((dieback_data["count"] == 2) & (dieback_data["state"] == False) & (delay_since_first_date_unconfirmed > 30))
+    changing_pixels = changing_pixels | gf_condition
 
     #4. State = ~State si Changement de pixel
     dieback_data["state"] = xr.where(changing_pixels, ~dieback_data["state"], dieback_data["state"])
@@ -105,8 +104,10 @@ def detection_dieback(dieback_data, anomalies, mask, date_index, date):
     dieback_data["last_duration"] = xr.where(~mask & (dieback_data["count"] == 1) & (dieback_data["first_date_unconfirmed_date"] > epoch), date - dieback_data["first_date_unconfirmed_date"], dieback_data["last_duration"])
     dieback_data["first_date_confirmed"] = dieback_data["first_date_confirmed"].where(~changing_pixels,date_index)
 
+
     # 7. first_date_unconfirmed = date_index si premiere anomalie
     dieback_data["first_date_unconfirmed"] = xr.where(~mask & (dieback_data["count"] == 1), date_index, dieback_data["first_date_unconfirmed"])
+
 
     dieback_data["first_date_unconfirmed_date"] = xr.where(~mask & (dieback_data["count"] == 1), date, dieback_data["first_date_unconfirmed_date"])
 
