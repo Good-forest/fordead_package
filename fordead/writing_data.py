@@ -184,14 +184,10 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
         Polygons containing the period during which dates fall.
 
     """
-    
-    np.set_printoptions(threshold=np.inf)
-    debug = False
 
     inds_soil = np.digitize(first_date_number, bins_as_datenumber, right = True)
     inds_soil_confirmed = inds_soil
     if bins_as_confirmed is not None:
-        debug = True
         inds_soil_confirmed = np.digitize(bins_as_confirmed, bins_as_datenumber, right = True)
     mask = (relevant_area & (inds_soil != 0) &
             (inds_soil != len(bins_as_date))).compute().data
@@ -223,10 +219,6 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
         feature['properties']['delta_period'] = stat.get('majority', None) - feature['properties']['period_index']
 
     gp_results = gp.GeoDataFrame.from_features(features)
-    print(np.unique(gp_results["delta_period"],return_counts=True))
-
-    if debug:
-        print(gp_results.head(10))
 
     if gp_results.size != 0:
         gp_results.period_index=gp_results.period_index.astype(int)
