@@ -216,7 +216,6 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
 
     for feature, stat in zip(features, stats):
         feature['properties']['confirmed_period_index'] = stat.get('majority', None)
-        feature['properties']['delta_period'] = stat.get('majority', None) - feature['properties']['period_index']
 
     gp_results = gp.GeoDataFrame.from_features(features)
 
@@ -231,7 +230,7 @@ def get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_d
         gp_results.insert(0, "first_date_confirmed", ((bins_as_date[gp_results.confirmed_period_index]).strftime('%Y-%m-%d')))
         ###############
         gp_results.crs = relevant_area.rio.crs #attrs["crs"].replace("+init=","")
-        # gp_results = gp_results.drop(columns=['period_index'])
+        gp_results = gp_results.drop(columns=['period_index', 'confirmed_period_index'])
     else:
         print("No detection in this area")
 
