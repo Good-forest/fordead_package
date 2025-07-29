@@ -153,7 +153,6 @@ def export_results(
             #EXPORTING DIEBACK 
             tile.add_path("periodic_results_dieback", tile.data_directory / "Results" / "periodic_results_dieback.shp")
             periodic_results = get_periodic_results_as_shapefile(first_date_number, bins_as_date, bins_as_datenumber, relevant_area, dieback_data.state.attrs)
-            periodic_results.to_file('/tmp/periodic_results_dieback.geojson', driver="GeoJSON")
           
             if conf_threshold_list is not None and conf_classes_list is not None and len(conf_threshold_list) != 0 and len(conf_classes_list) != 0:
                 if tile.parameters["stress_index_mode"] is None:
