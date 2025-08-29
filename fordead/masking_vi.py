@@ -420,11 +420,20 @@ def get_dict_vi(path_dict_vi = None):
 
     """
     
+    # dict_vi = {"CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'},
+    #             "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'dieback_change_direction': '-'},
+    #             "BSI" : {"formula" : '(B4 + B2 - B3)/(B4 + B2 + B3)', 'dieback_change_direction' : '-'},
+    #             "NDWI" : {"formula" : '(B8A-B11)/(B8A+B11)', 'dieback_change_direction' : '-'},
+    #             "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'}}
+    #
     dict_vi = {"CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'},
-                "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'dieback_change_direction': '-'},
-                "BSI" : {"formula" : '(B4 + B2 - B3)/(B4 + B2 + B3)', 'dieback_change_direction' : '-'},
+                "CRRE" : {"formula" : 'B5/(B4+((B6-B4)/(740-665))*(705-665))', 'dieback_change_direction' : '+'},
                 "NDWI" : {"formula" : '(B8A-B11)/(B8A+B11)', 'dieback_change_direction' : '-'},
-                "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'}}
+                "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'dieback_change_direction': '-'},
+                "IRECI" : {"formula" : '(B7-B4)/(B5/B6)', 'dieback_change_direction' : '+'},
+                "BSI" : {"formula" : '(B4 + B2 - B3)/(B4 + B2 + B3)', 'dieback_change_direction' : '-'},
+                "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'},
+                }
     if path_dict_vi is not None:
         d = {}
         with open(path_dict_vi) as f:

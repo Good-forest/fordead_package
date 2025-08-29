@@ -6,6 +6,7 @@ Created on Mon Nov  2 09:34:34 2020
 """
 
 from fordead.masking_vi import get_dict_vi
+import numpy as np
 import xarray as xr
 
 def detection_anomalies(vegetation_index, mask, predicted_vi, threshold_anomaly, vi, path_dict_vi = None):
@@ -50,7 +51,7 @@ def detection_anomalies(vegetation_index, mask, predicted_vi, threshold_anomaly,
     
     return anomalies.squeeze("Time").squeeze("band"), diff_vi.squeeze("Time").squeeze("band") #.squeeze("Time").squeeze("band")
 
-def detection_dieback(dieback_data, anomalies, mask, date_index):
+def detection_dieback(dieback_data, anomalies, mask, date_index, date):
     """
     Updates dieback data using anomalies. Successive anomalies are counted for pixels considered healthy, and successive dates without anomalies are counted for pixels considered suffering from dieback. The state of the pixel changes when the count reaches 3.
     
@@ -75,15 +76,40 @@ def detection_dieback(dieback_data, anomalies, mask, date_index):
     changing_pixels : DataArray
         Binary array (x,y) containing True where pixels change state is confirmed with a third successive anomaly
     """
+    dieback_data["count"] = xr.where(~mask & (anomalies != dieback_data["state"]), dieback_data["count"] + 1 , dieback_data["count"])
+    dieback_data["count"] = xr.where(~mask & (anomalies == dieback_data["state"]), 0, dieback_data["count"])
 
-    dieback_data["count"] = xr.where(~mask & (anomalies!=dieback_data["state"]),dieback_data["count"]+1,dieback_data["count"])
-    dieback_data["count"] = xr.where(~mask & (anomalies==dieback_data["state"]),0,dieback_data["count"])
-    changing_pixels = dieback_data["count"]==3
+    delay_since_first_date_unconfirmed = (date - dieback_data["first_date_unconfirmed_date"]) / 86400
 
-    dieback_data["state"] = xr.where(changing_pixels, ~dieback_data["state"], dieback_data["state"]) #Changement d'état si CompteurScolyte = 3 et date valide
-    dieback_data["first_date"] = dieback_data["first_date"].where(~changing_pixels,dieback_data["first_date_unconfirmed"])
-    dieback_data["count"] = xr.where(changing_pixels, 0,dieback_data["count"])
-    dieback_data["first_date_unconfirmed"]=xr.where(~mask & (dieback_data["count"]==1), date_index, dieback_data["first_date_unconfirmed"]) #Garde la première date de détection de scolyte sauf si déjà détécté comme scolyte
+    last_duration_less_than_90_days = (dieback_data["last_duration"] / 86400) < 90
+
+    changing_pixels = dieback_data["count"] == 3
+    # changing_pixels = (dieback_data["count"] == 3) & (
+    #     (dieback_data["state"] != True) |
+    #     (delay_more_than_30_days & last_duration_less_than_90_days)
+    # )
+    gf_condition = ((dieback_data["count"] == 2) & (dieback_data["state"] == False) & (delay_since_first_date_unconfirmed > 30))
+    changing_pixels = changing_pixels | gf_condition
+
+    #4. State = ~State si Changement de pixel
+    dieback_data["state"] = xr.where(changing_pixels, ~dieback_data["state"], dieback_data["state"])
+
+    #5. first_date = first_date_unconfirmed si Changement de pixel
+    dieback_data["first_date"] = dieback_data["first_date"].where(~changing_pixels, dieback_data["first_date_unconfirmed"])
+
+    # 6. count = 0 si changement de pixel
+    dieback_data["count"] = xr.where(changing_pixels, 0, dieback_data["count"])
+
+    epoch = np.datetime64("1970-01-01", 's').astype(float)
+    dieback_data["last_duration"] = xr.where(~mask & (dieback_data["count"] == 1) & (dieback_data["first_date_unconfirmed_date"] > epoch), date - dieback_data["first_date_unconfirmed_date"], dieback_data["last_duration"])
+    dieback_data["first_date_confirmed"] = dieback_data["first_date_confirmed"].where(~changing_pixels,date_index)
+
+
+    # 7. first_date_unconfirmed = date_index si premiere anomalie
+    dieback_data["first_date_unconfirmed"] = xr.where(~mask & (dieback_data["count"] == 1), date_index, dieback_data["first_date_unconfirmed"])
+
+
+    dieback_data["first_date_unconfirmed_date"] = xr.where(~mask & (dieback_data["count"] == 1), date, dieback_data["first_date_unconfirmed_date"])
 
     return dieback_data,changing_pixels
 

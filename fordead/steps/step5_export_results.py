@@ -95,7 +95,8 @@ def export_results(
         print("Exporting results")
         bins_as_date, bins_as_datenumber = get_bins(start_date,end_date,frequency,tile.dates)
         first_date_number = convert_dateindex_to_datenumber(dieback_data.first_date,dieback_data.state, tile.dates)
-    
+        first_date_confirmed = convert_dateindex_to_datenumber(dieback_data.first_date_confirmed,dieback_data.state, tile.dates)
+        print("YOAN", first_date_confirmed)
         if tile.parameters["soil_detection"]:
             soil_data = import_soil_data(tile.paths, chunks= 1280)
             first_date_number_soil = convert_dateindex_to_datenumber(soil_data.first_date, soil_data.state, tile.dates)
