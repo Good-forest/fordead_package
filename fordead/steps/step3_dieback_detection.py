@@ -147,7 +147,9 @@ def dieback_detection(
     new_dates = tile.dates[tile.dates > tile.last_computed_anomaly] if hasattr(tile, "last_computed_anomaly") else tile.dates[tile.dates >= tile.parameters["min_last_date_training"]]
     is_last_batch = len(new_dates) <= batch_size
     new_dates = new_dates[:batch_size]
-    last_date = new_dates[-1]
+    last_date = None
+    if len(new_dates) > 0:
+        last_date = new_dates[-1]
 
     if len(new_dates) == 0:
         print("Dieback detection : no new dates")
