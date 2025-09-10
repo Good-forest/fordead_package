@@ -102,7 +102,7 @@ def detection_dieback(dieback_data, anomalies, mask, date_index, date):
 
     epoch = np.datetime64("1970-01-01", 's').astype(float)
     dieback_data["last_duration"] = xr.where(~mask & (dieback_data["count"] == 1) & (dieback_data["first_date_unconfirmed_date"] > epoch), date - dieback_data["first_date_unconfirmed_date"], dieback_data["last_duration"])
-    dieback_data["first_date_confirmed"] = dieback_data["first_date_confirmed"].where(~changing_pixels,date_index)
+    dieback_data["confirmation_date"] = dieback_data["confirmation_date"].where(~changing_pixels,date_index)
 
 
     # 7. first_date_unconfirmed = date_index si premiere anomalie
