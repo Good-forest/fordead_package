@@ -47,13 +47,38 @@ def process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source
     del mask, stack_bands, invalid_values
 
 
+import xarray as xr
 def process_one(tile, date, interpolation_order, compress_raster, compress_vi=False):
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
 
     vegetation_index = compute_vegetation_index(stack_bands, formula = tile.vi_formula)
-    invalid_values = vegetation_index.isnull() | np.isinf(vegetation_index)
-    vegetation_index = vegetation_index.where(~invalid_values,0)
+    # Replace NaN/inf with 0, but do not add them to the invalid mask
+    vegetation_index = vegetation_index.fillna(0.5)
+    # Create an empty mask for invalid_values, since NaNs are handled.
+    invalid_values = xr.zeros_like(vegetation_index, dtype=bool)
 
+    # # Calculate basic statistics, ignoring NaNs
+    # stack_vi = vegetation_index
+    # vi_min = np.nanmin(stack_vi.values)
+    # vi_max = np.nanmax(stack_vi.values)
+    # vi_mean = np.nanmean(stack_vi.values)
+    # vi_std = np.nanstd(stack_vi.values)
+    # 
+    # # Calculate NaN statistics
+    # total_points = np.prod(stack_vi.shape)
+    # nan_points = np.sum(np.isnan(stack_vi.values))
+    # nan_percentage = (nan_points / total_points) * 100
+    #
+    # print("erbwlekjbwelrkgjbwerglkjherlgkjhelkrjhwlerhe")
+    # print(f"VI Shape: {stack_vi.shape}")
+    # print(f"VI Min: {vi_min:.4f}")
+    # print(f"VI Max: {vi_max:.4f}")
+    # print(f"VI Mean: {vi_mean:.4f}")
+    # print(f"VI Std Dev: {vi_std:.4f}")
+    # print(f"NaN Data Points: {nan_points}")
+    # print(f"NaN Percentage: {nan_percentage:.2f}%")
+    # print("erbwlekjbwelrkgjbwerglkjherlgkjhelkrjhwlerhe")
+    #
     if compress_raster:
         write_tif(vegetation_index, tile.raster_meta["attrs"],tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".tif"),nodata=0)
     else:
@@ -211,6 +236,7 @@ def compute_masked_vegetationindex(
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
 
 #Import or initialize data for the soil mask
+    soil_data = None
     if soil_detection:
         if tile.paths["state_soil"].exists():
             soil_data = import_soil_data(tile.paths)
