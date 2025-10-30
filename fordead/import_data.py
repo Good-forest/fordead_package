@@ -773,7 +773,9 @@ def import_stackedmaskedVI(tuile,min_date = None, max_date=None,chunks = None):
     # add XL
     # stack_vi["band_data"] if written with write_tif instead of stack_vi["Band1"]
     # list(stack_vi.data_vars)[0] to get the name of the first variable (supposed to be the only one)
-    return stack_vi[list(stack_vi.data_vars)[0]], stack_masks
+    vegetation_index = stack_vi[list(stack_vi.data_vars)[0]]
+    vegetation_index = vegetation_index.fillna(0)
+    return vegetation_index, stack_masks
 
     
 def import_coeff_model(path, chunks = None):
