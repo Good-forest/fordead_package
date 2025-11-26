@@ -165,9 +165,14 @@ def get_band_paths(dict_sen_paths):
             if "B12" in path:
                 DictSentinelPaths[date]["B12"]=Path(path)
                 
-            if "_CLM_" in path or "SCL" in path:
+            # if "_CLM_" in path or "SCL" in path:
+            #     DictSentinelPaths[date]["Mask"]=Path(path)
+
+            if "_CLM_" in path :
                 DictSentinelPaths[date]["Mask"]=Path(path)
-   
+            if "SCL" in path:
+                DictSentinelPaths[date]["SCL"]=Path(path)
+
     return DictSentinelPaths
 
 

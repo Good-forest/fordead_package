@@ -209,6 +209,11 @@ def compute_masked_vegetationindex(
     print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
 
     tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
+    # Add XL - add SCL bands
+    # tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11","SCL"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
+    # if soil_detection:
+    #     tile.used_bands.append("SCL")
+    print("Using bands : ", tile.used_bands)
 
     date = new_dates[0]
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])

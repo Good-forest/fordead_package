@@ -270,6 +270,7 @@ def get_pre_masks(stack_bands):
 
     """
     
+    # soil_anomaly = compute_vegetation_index(stack_bands, formula = "(B11 > 1250) & (B2 < 600) & ((B3 + B4) > 800) & (SCL == 5)")
     soil_anomaly = compute_vegetation_index(stack_bands, formula = "(B11 > 1250) & (B2 < 600) & ((B3 + B4) > 800)")
     # soil_anomaly = compute_vegetation_index(stack_bands, formula = "(B11 > 1250) & (B2 < 600) & (B4 > 600)")
     # soil_anomaly = compute_vegetation_index(stack_bands, formula = "(B4 + B2 - B3)/(B4 + B2 + B3)") #Bare soil index
@@ -426,14 +427,54 @@ def get_dict_vi(path_dict_vi = None):
     #             "NDWI" : {"formula" : '(B8A-B11)/(B8A+B11)', 'dieback_change_direction' : '-'},
     #             "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'}}
     #
-    dict_vi = {"CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'},
-                "CRRE" : {"formula" : 'B5/(B4+((B6-B4)/(740-665))*(705-665))', 'dieback_change_direction' : '+'},
-                "NDWI" : {"formula" : '(B8A-B11)/(B8A+B11)', 'dieback_change_direction' : '-'},
-                "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'dieback_change_direction': '-'},
-                "IRECI" : {"formula" : '(B7-B4)/(B5/B6)', 'dieback_change_direction' : '+'},
-                "BSI" : {"formula" : '(B4 + B2 - B3)/(B4 + B2 + B3)', 'dieback_change_direction' : '-'},
-                "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'},
+    # dict_vi = {"CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'},
+    #             "CRRE" : {"formula" : 'B5/(B4+((B6-B4)/(740-665))*(705-665))', 'dieback_change_direction' : '+'},
+    #             "NDWI" : {"formula" : '(B8A-B11)/(B8A+B11)', 'dieback_change_direction' : '-'},
+    #             "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'dieback_change_direction': '-'},
+    #             "IRECI" : {"formula" : '(B7-B4)/(B5/B6)', 'dieback_change_direction' : '+'},
+    #             "BSI" : {"formula" : '(B4 + B2 - B3)/(B4 + B2 + B3)', 'dieback_change_direction' : '-'},
+    #             "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'},
+    #             }
+    
+    
+    dict_vi = {
+                # "CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'}, Fordead origine sur la base longueur d'onde Sentinel-2B
+                "BSI" : {"formula" : '((B12+B4) - (B8+B2))/((B12+B4) + (B8+B2))', "name": "Bare Soil Index", 'dieback_change_direction' : '+', 'max_value' : 1}, 
+                "BSI2" : {"formula" : '((B11+B4) - (B8+B2))/((B11+B4) + (B8+B2))', "name": "Bare Soil Index 2", 'dieback_change_direction' : '+', 'max_value' : 1}, 
+                "BSI3" : {"formula" : '(B4+B2-B3)/(B4+B2+B3)', "name": "Bare Soil Index 3", 'dieback_change_direction' : '+', 'max_value' : 1},
+                "CCCI" : {"formula" : '((B9-B5)/(B9+B5))/((B9-B4)/(B9+B4))', "name": "Canopy Chlorophyll Content Index", 'dieback_change_direction' : '+', 'max_value' : 1},
+                "EVI" : {"formula" : '2.5*((B8-B4)/(B8+6*B4 - 7.5*B2 + 1))', "name": "Enhanced Vegetation Index", 'dieback_change_direction' : '-', 'max_value' : 5},
+                "CRSWIR" : {'formula': 'B11/(B8 + ((B12-B8)/(2190-842))*(1610-842))', 'name': "Continuum Removal SWIR with B8 band", 'dieback_change_direction': '+', 'max_value' : 2}, # XL
+                "CRSWIR2" : {'formula': 'B11/(B8A + ((B12-B8A)/(2190-865))*(1610-865))', 'name': "Continuum Removal SWIR - original - with B8A band - ", 'dieback_change_direction': '+', 'max_value' : 2}, # Claessens et al. 2023
+                "CRRE" : {"formula" : 'B5/(B4 + ((B6-B4)/(740-665))*(705-665))', 'name': "Continuum Removal Red Edge", 'dieback_change_direction' : '+', 'max_value' : 2},
+                "CRRed" : {"formula" : 'B4/(B3 + ((B8-B3)/(842-560))*(665-560))', 'name': "Continuum Removal Red", 'dieback_change_direction' : '+', 'max_value' : 2},
+                "CRNIR" : {"formula" : 'B8/(B4 + ((B11-B4)/(1610-665))*(842-665))', 'name': "Continuum Removal NIR", 'dieback_change_direction' : '+', 'max_value' : 2},
+                "GRVI" : {"formula" : '(B3-B4)/(B3+B4)', 'name': "Green Red Vegetation Index", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "GNDVI" : {"formula" : '(B8-B3)/(B8+B3)', 'name': "Green Normalized Difference Vegetation Index", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "GRNDVI" : {"formula" : '(B8-(B3+B4))/(B8+(B3+B4))', 'name': "Green Red Edge Normalized Difference Vegetation Index", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "IRECI" : {"formula" : '(B7-B4)/(B5/B6)', 'name': "Inverted Red Edge Chlorophyll Index", 'dieback_change_direction' : '-', 'max_value' : 5000},
+                "LCI" : {"formula" : '(B8A-B5)/(B8A+B4)', 'name': "Leaf Chlorophyll Index", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "MBI" : {"formula" : '(B11-B12-B8)/(B12+B11+B8 + 0.5)', "name": "Modified Bare Index", 'dieback_change_direction' : '+', 'max_value' : 1},    
+                "MBSI" : {"formula" : '((B12+B11) - (B8+B2))/((B12+B11) + (B8+B2))', "name": "Modified Bare Soil Index", 'dieback_change_direction' : '+', 'max_value' : 1},
+                "MCARI" : {"formula" : '((B5-B4) - 0.2*(B5-B3))*(B5/B4)', 'name': "Modified Chlorophyll Absorption in Reflectance Index", 'dieback_change_direction' : '-', 'max_value' : 1000},
+                "MSI" : {"formula" : 'B11/B8', 'name': "Moisture Stress Index", 'dieback_change_direction' : '+', 'max_value' : 1},
+                "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'name': "Normalized Burn Ratio", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "NBR2" : {"formula" : '(B8A-B12)/(B8A+B12)', 'name': "Normalized Burn Ratio with B8A band", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "NDMI" : {"formula" : '(B8-B11)/(B8+B11)', "name": "Normalized Difference Moisture Index with B8 band", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "NDMI2" : {"formula" : '(B8A-B11)/(B8A+B11)', "name": "Normalized Difference Moisture Index - original", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "NDRE" : {"formula" : '(B8A-B5)/(B8A+B5)', 'name': "Normalized Difference Red Edge", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'name': "Normalized Difference Vegetation Index", 'dieback_change_direction': '-', 'max_value' : 1},
+                "NDVIre2n" : {'formula': '(B8A-B6)/(B8A+B6)', 'name': "NDVI Red Edge 2 narrow", 'dieback_change_direction': '-', 'max_value' : 1},
+                "NDWI" : {"formula" : '(B3-B8)/(B3+B8)', 'name': "Normalized Difference Water Index", 'dieback_change_direction' : '-', 'max_value' : 1},
+                "REIP" : {"formula" : '700 + 40*((B4+B7)/2 - B5)/(B6-B5)', 'name': "Red Edge Inflection Point / Position (REPO)", 'dieback_change_direction' : '-', 'max_value' : 750},
+                "SAVI" : {"formula" : '1.5*(B8-B4)/(B8+B4+0.5)', 'name': "Soil Adjusted Vegetation Index", 'dieback_change_direction' : '-', 'max_value' : 2},
+                "SIPI" : {"formula" : '(B8-B2)/(B8-B4)', 'name': "Structure Insensitive Pigment Index", 'dieback_change_direction' : '-', 'max_value' : 10},
+                "TCG" : {"formula" : '0.2848*B2 - 0.2453*B3 - 0.5436*B4 + 0.7243*B8A + 0.0840*B11 - 0.1800*B12', 'name': "Tasseled Cap Greenness", 'dieback_change_direction' : '-', 'max_value' : 2000},
+                "TCW" : {"formula" :  '0.1509*B2 + 0.1973*B3 + 0.3279*B4 + 0.7112*B8A - 0.4572*B11 - 0.3363*B12', 'name': "Tasseled Cap Wetness", 'dieback_change_direction' : '+', 'max_value' : 2000},
+                "TCB" : {"formula" :  '0.332*B3 + 0.603*B4 + 0.675*B6 + 0.262*B9', 'name': "Tasseled Cap Brightness", 'dieback_change_direction' : '+', 'max_value' : 2000},
                 }
+
+
     if path_dict_vi is not None:
         d = {}
         with open(path_dict_vi) as f:
@@ -579,11 +620,11 @@ def compute_vegetation_index(reflectance, vi = "CRSWIR", formula = None, path_di
     match_string = r"B(\d{1}[A-Z]|\d{2}|\d{1})" # B + un chiffre + une lettre OU B + deux chiffres OU B + un chiffre
     formula = re.sub(match_string, remove_0_from_match, formula) #Removes 0 from band name (B03 -> B3)
     p = re.compile(match_string)
-    
     if isinstance(reflectance, pd.DataFrame):
         code_formula = p.sub(r'reflectance["B\1"]', formula)
+        # code_formula = p.sub(r'reflectance[["B\1", "SCL"]]', formula)
     else:
         code_formula = p.sub(r'reflectance.sel(band= "B\1")', formula)
-        
+        # code_formula = p.sub(r'reflectance.sel(band=reflectance.band.isin(["B\1", "SCL"]))', formula)
     return eval(code_formula)
 
