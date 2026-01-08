@@ -15,7 +15,9 @@ from affine import Affine
 import geopandas as gp
 import dask.array as da
 from fordead.model_vegetation_index import prediction_vegetation_index
-from fordead.masking_vi import get_dict_vi
+# from fordead.masking_vi import get_dict_vi
+from goodforest_lib.utils.compute_additional_bands import get_dict_vi
+
 from scipy import ndimage
 import json
 from fordead.import_data import import_stress_index, import_coeff_model, import_dieback_data, import_masked_vi, import_first_detection_date_index, TileInfo, import_binary_raster, import_soil_data,import_resampled_sen_stack, import_stress_data

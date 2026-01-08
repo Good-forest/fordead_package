@@ -35,6 +35,8 @@ def process_one(tile, first_detection_date_index, coeff_model, date_index, date,
     anomalies, diff_vi = detection_anomalies(vegetation_index, mask, predicted_vi, threshold_anomaly,
                                              vi = vi, path_dict_vi = path_dict_vi)
 
+    # Add XL
+    write_tif(predicted_vi, first_detection_date_index.attrs, tile.paths["PredictedDir"] / str("PredictedVI_" + date + ".tif"),nodata=0)
     write_tif(anomalies, first_detection_date_index.attrs, tile.paths["AnomaliesDir"] / str("Anomalies_" + date + ".tif"),nodata=0)
 
     del vegetation_index, predicted_vi
@@ -81,7 +83,7 @@ def dieback_detection(
     path_dict_vi = None,
     progress=True,
     multi_process=False,
-    batch_size=500
+    batch_size=700
     ):
     """
     Detects anomalies by comparing the vegetation index and its prediction from the model. 
@@ -117,7 +119,9 @@ def dieback_detection(
     tile = tile.import_info()
     tile.add_parameters({"threshold_anomaly" : threshold_anomaly, "max_nb_stress_periods" : max_nb_stress_periods, "stress_index_mode" : stress_index_mode})
     if tile.parameters["Overwrite"] : 
-        tile.delete_dirs("AnomaliesDir","state_dieback","periodic_results_dieback","result_files","timelapse","series","nb_periods_stress") #Deleting previous detection results if they exist
+        # tile.delete_dirs("AnomaliesDir","state_dieback","periodic_results_dieback","result_files","timelapse","series","nb_periods_stress") #Deleting previous detection results if they exist
+        # Modify XL
+        tile.delete_dirs("AnomaliesDir","PredictedDir", "state_dieback","periodic_results_dieback","result_files","timelapse","series","nb_periods_stress") #Deleting previous 
         tile.delete_files("too_many_stress_periods_mask")
         tile.delete_attributes("last_computed_anomaly","last_date_export")
 
@@ -126,6 +130,10 @@ def dieback_detection(
     
     tile.add_dirpath("AnomaliesDir", tile.data_directory / "DataAnomalies") #Choose anomalies directory
     tile.getdict_datepaths("Anomalies",tile.paths["AnomaliesDir"]) # Get paths and dates to previously calculated anomalies
+    # Add XL
+    tile.add_dirpath("PredictedDir", tile.data_directory / "PredictedVI") #Choose anomalies directory
+    tile.getdict_datepaths("Predicted",tile.paths["PredictedDir"]) # Get paths and dates to previously calculated anomalies
+
     tile.search_new_dates() #Get list of all used dates
     
     tile.add_path("too_many_stress_periods_mask", tile.data_directory / "TimelessMasks" / "too_many_stress_periods_mask.tif")

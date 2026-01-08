@@ -19,7 +19,9 @@ import datetime
 import matplotlib.colors as colors
 
 
-from fordead.masking_vi import get_dict_vi
+# from fordead.masking_vi import get_dict_vi
+from goodforest_lib.utils.compute_additional_bands import get_dict_vi
+
 from fordead.import_data import import_resampled_sen_stack, import_soil_data, import_dieback_data, import_binary_raster, import_stress_data, import_stress_index
 
 
