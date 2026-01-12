@@ -415,39 +415,11 @@ def compute_user_mask(stack_bands, formula_mask):
 #         Path of the text file. 
 #         Each line of the text file corresponds to an index, in the format "INDEX_NAME FORMULA SIGN".
 #         FORMULA corresponds to a formula as can be used in the function compute_vegetation_index, SIGN can be - or +. The default is None.
-
 #     Returns
 #     -------
 #     dict_vi : dict
 #         Dictionnary containing formula of vegetation indices, as well as the way it changes in case of dieback
-
 #     """
-    
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    # dict_vi = {"CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'},
-    #             "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'dieback_change_direction': '-'},
-    #             "BSI" : {"formula" : '(B4 + B2 - B3)/(B4 + B2 + B3)', 'dieback_change_direction' : '-'},
-    #             "NDWI" : {"formula" : '(B8A-B11)/(B8A+B11)', 'dieback_change_direction' : '-'},
-    #             "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'}}
-    #
-    dict_vi = {"CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'},
-                "CRRE" : {"formula" : 'B5/(B4+((B6-B4)/(740-665))*(705-665))', 'dieback_change_direction' : '+'},
-                "NDWI" : {"formula" : '(B8A-B11)/(B8A+B11)', 'dieback_change_direction' : '-'},
-                "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'dieback_change_direction': '-'},
-                "IRECI" : {"formula" : '(B7-B4)/(B5/B6)', 'dieback_change_direction' : '+'},
-                "BSI" : {"formula" : '(B4 + B2 - B3)/(B4 + B2 + B3)', 'dieback_change_direction' : '-'},
-                "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'},
-                }
-    if path_dict_vi is not None:
-        d = {}
-        with open(path_dict_vi) as f:
-            for line in f:
-                list_line = line.split()
-                d[list_line[0]]={"formula" : list_line[1], "dieback_change_direction" : list_line[2]}
-=======
-=======
->>>>>>> Stashed changes
 #     dict_vi = {
 #                 # "CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'}, Fordead origine sur la base longueur d'onde Sentinel-2B
 #                 "BSI" : {"formula" : '((B12+B4) - (B8+B2))/((B12+B4) + (B8+B2))', "name": "Bare Soil Index", 'dieback_change_direction' : '+', 'max_value' : 1}, 
@@ -487,19 +459,12 @@ def compute_user_mask(stack_bands, formula_mask):
 #                 # "TCW" : {"formula" :  '0.1509*B2 + 0.1973*B3 + 0.3279*B4 + 0.7112*B8A - 0.4572*B11 - 0.3363*B12', 'name': "Tasseled Cap Wetness", 'dieback_change_direction' : '+', 'max_value' : 2000},
 #                 "TCW" : {"formula" :  '0.1509*B2 + 0.1973*B3 + 0.3279*B4 + 0.3406*B8 - 0.7112*B11 - 0.4572*B12', 'name': "Tasseled Cap Wetness", 'dieback_change_direction' : '-', 'max_value' : 2000},
 #                 }
-
-
 #     if path_dict_vi is not None:
 #         d = {}
 #         with open(path_dict_vi) as f:
 #             for line in f:
 #                 list_line = line.split()
-#                 d[list_line[0]]={"formula" : list_line[1], "dieback_change_direction" : list_line[2]}
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-                
+#                 d[list_line[0]]={"formula" : list_line[1], "dieback_change_direction" : list_line[2]}                
 #         dict_vi.update(d)
 #     return dict_vi
 
