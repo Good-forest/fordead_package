@@ -5,8 +5,8 @@ Created on Mon Nov  2 09:34:34 2020
 @author: Raphael Dutrieux
 """
 
-# from fordead.masking_vi import get_dict_vi
-from goodforest_lib.utils.compute_additional_bands import get_dict_vi
+from fordead.masking_vi import get_dict_vi
+# from goodforest_lib.utils.compute_additional_bands import get_dict_vi
 
 import numpy as np
 import xarray as xr
