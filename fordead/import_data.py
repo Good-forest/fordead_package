@@ -165,9 +165,14 @@ def get_band_paths(dict_sen_paths):
             if "B12" in path:
                 DictSentinelPaths[date]["B12"]=Path(path)
                 
-            if "_CLM_" in path or "SCL" in path:
+            # if "_CLM_" in path or "SCL" in path:
+            #     DictSentinelPaths[date]["Mask"]=Path(path)
+
+            if "_CLM_" in path :
                 DictSentinelPaths[date]["Mask"]=Path(path)
-   
+            if "SCL" in path:
+                DictSentinelPaths[date]["SCL"]=Path(path)
+
     return DictSentinelPaths
 
 
@@ -773,7 +778,9 @@ def import_stackedmaskedVI(tuile,min_date = None, max_date=None,chunks = None):
     # add XL
     # stack_vi["band_data"] if written with write_tif instead of stack_vi["Band1"]
     # list(stack_vi.data_vars)[0] to get the name of the first variable (supposed to be the only one)
-    return stack_vi[list(stack_vi.data_vars)[0]], stack_masks
+    vegetation_index = stack_vi[list(stack_vi.data_vars)[0]]
+    vegetation_index = vegetation_index.fillna(0)
+    return vegetation_index, stack_masks
 
     
 def import_coeff_model(path, chunks = None):
@@ -855,13 +862,13 @@ def import_dieback_data(dict_paths, chunks = None):
     count_dieback = rioxarray.open_rasterio(dict_paths["count_dieback"],chunks = chunks)
     last_duration = rioxarray.open_rasterio(dict_paths["last_duration_dieback"],chunks = chunks)
     first_date_unconfirmed_date_dieback = rioxarray.open_rasterio(dict_paths["first_date_unconfirmed_date_dieback"],chunks = chunks)
-    first_date_confirmed = rioxarray.open_rasterio(dict_paths["first_date_confirmed_dieback"],chunks = chunks)
+    confirmation_date = rioxarray.open_rasterio(dict_paths["confirmation_date_dieback"],chunks = chunks)
 
 
     dieback_data=xr.Dataset({
         "state": state_dieback,
         "first_date": first_date_dieback,
-                             "first_date_confirmed": first_date_confirmed,
+                             "confirmation_date": confirmation_date,
         "first_date_unconfirmed" : first_date_unconfirmed_dieback,
         "first_date_unconfirmed_date" : first_date_unconfirmed_date_dieback,
         "count" : count_dieback,
@@ -967,7 +974,7 @@ def initialize_dieback_data(shape,coords):
     dieback_data= xr.Dataset({
         "state": xr.DataArray(zeros_array.astype(bool), coords=coords),
         "first_date": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
-                                 "first_date_confirmed": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
+                                 "confirmation_date": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
         "first_date_unconfirmed": xr.DataArray(zeros_array.astype(np.uint16), coords=coords),
         "first_date_unconfirmed_date": xr.DataArray(zeros_array.astype(np.float64), coords=coords),
         "count" : xr.DataArray(zeros_array, coords=coords),

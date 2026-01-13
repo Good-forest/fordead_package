@@ -47,11 +47,14 @@ def process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source
     del mask, stack_bands, invalid_values
 
 
+import xarray as xr
 def process_one(tile, date, interpolation_order, compress_raster, compress_vi=False):
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
 
     vegetation_index = compute_vegetation_index(stack_bands, formula = tile.vi_formula)
-    invalid_values = vegetation_index.isnull() | np.isinf(vegetation_index)
+
+
+    invalid_values = vegetation_index.isnull() | np.isinf(vegetation_index) | np.isnan(vegetation_index)
     vegetation_index = vegetation_index.where(~invalid_values,0)
 
     if compress_raster:
@@ -206,11 +209,17 @@ def compute_masked_vegetationindex(
     print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
 
     tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
+    # Add XL - add SCL bands
+    # tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11","SCL"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
+    # if soil_detection:
+    #     tile.used_bands.append("SCL")
+    print("Using bands : ", tile.used_bands)
 
     date = new_dates[0]
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
 
 #Import or initialize data for the soil mask
+    soil_data = None
     if soil_detection:
         if tile.paths["state_soil"].exists():
             soil_data = import_soil_data(tile.paths)
