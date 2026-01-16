@@ -661,18 +661,19 @@ def import_resampled_sen_stack(band_paths, list_bands, interpolation_order = 0, 
         stack_bands = [rioxarray.open_rasterio(band_paths[band]) for band in list_bands]
     else:
         stack_bands = [rioxarray.open_rasterio(band_paths[band],chunks = 1280).loc[dict(x=slice(extent[0]-20, extent[2]+20),y = slice(extent[3]+20,extent[1]-20))].compute() for band in list_bands]
+    # return stack_bands
     
     crs = stack_bands[0].rio.crs
     #Resampling at 10m resolution
     for band_index in range(len(stack_bands)):
-        if stack_bands[band_index].rio.resolution()==(20.0,-20.0):            
-            # stack_bands[band_index] = xr.DataArray(ndimage.zoom(stack_bands[band_index],zoom=[1,2.0,2.0],order=interpolation_order), 
-            #                                        coords=stack_bands[0].coords)
-            stack_bands[band_index] = xr.DataArray(ndimage.zoom(stack_bands[band_index],zoom=[1,2.0,2.0],order=interpolation_order), 
-                                                   coords={"band" : [1], 
-                                                           "y" : np.linspace(stack_bands[band_index].isel(x=0,y=0).y.values+5, stack_bands[band_index].isel(x=0,y=stack_bands[band_index].sizes["y"]-1).y.values-5, num=stack_bands[band_index].sizes["y"]*2),
-                                                           "x" : np.linspace(stack_bands[band_index].isel(x=0,y=0).x.values-5, stack_bands[band_index].isel(x=stack_bands[band_index].sizes["x"]-1,y=0).x.values+5, num=stack_bands[band_index].sizes["x"]*2)},
-                                                   dims=["band","y","x"]).rio.write_crs(crs)
+        # if stack_bands[band_index].rio.resolution()==(20.0,-20.0):            
+        #     # stack_bands[band_index] = xr.DataArray(ndimage.zoom(stack_bands[band_index],zoom=[1,2.0,2.0],order=interpolation_order), 
+        #     #                                        coords=stack_bands[0].coords)
+        #     stack_bands[band_index] = xr.DataArray(ndimage.zoom(stack_bands[band_index],zoom=[1,2.0,2.0],order=interpolation_order), 
+        #                                            coords={"band" : [1], 
+        #                                                    "y" : np.linspace(stack_bands[band_index].isel(x=0,y=0).y.values+5, stack_bands[band_index].isel(x=0,y=stack_bands[band_index].sizes["y"]-1).y.values-5, num=stack_bands[band_index].sizes["y"]*2),
+        #                                                    "x" : np.linspace(stack_bands[band_index].isel(x=0,y=0).x.values-5, stack_bands[band_index].isel(x=stack_bands[band_index].sizes["x"]-1,y=0).x.values+5, num=stack_bands[band_index].sizes["x"]*2)},
+        #                                            dims=["band","y","x"]).rio.write_crs(crs)
         if extent is not None:
             stack_bands[band_index] = clip_xarray(stack_bands[band_index], extent)
 

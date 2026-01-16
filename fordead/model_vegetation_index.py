@@ -12,6 +12,8 @@ from scipy.linalg import lstsq
 from fordead.import_data import import_binary_raster, import_masked_vi
 import warnings
 
+from pyproj import Transformer
+
 def get_detection_dates(stack_masks,min_last_date_training,nb_min_date=10):
     """
     Returns the index of the last date which will be used for training from the masks.
@@ -42,7 +44,19 @@ def get_detection_dates(stack_masks,min_last_date_training,nb_min_date=10):
     cumsum=(~stack_masks).cumsum(dim="Time",dtype=np.uint16)
     detection_dates = ((indexes > min_date_index) & (cumsum > nb_min_date))
     first_detection_date_index = detection_dates.argmax(dim="Time").astype(np.uint16)
-    
+    transformer = Transformer.from_crs("epsg:4326", "epsg:32632", always_xy=True)
+    lat, lon = 48.00444378, 6.79535380
+    utm_x, utm_y = transformer.transform(lon, lat)
+    pixel_mask = stack_masks.sel(
+        x=utm_x,
+        y=utm_y,
+        method="nearest"
+    ).compute()
+    valid_times = pixel_mask.Time.where(pixel_mask, drop=True)
+    unix_ts = valid_times.values
+
+    np.savetxt("/tmp/timestamps.txt", unix_ts, fmt='%s')
+
     return detection_dates, first_detection_date_index
 
 

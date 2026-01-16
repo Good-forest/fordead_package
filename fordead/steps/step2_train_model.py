@@ -110,8 +110,8 @@ def train_model(
     if correct_vi:
         stack_vi, tile.large_scale_model, tile.correction_vi = model_vi_correction(stack_vi, stack_masks, tile.paths)
 
-    # Modéliser le CRSWIR
     stack_masks = stack_masks | detection_dates #Masking data not used in training
+
     coeff_model = model_vi(stack_vi, stack_masks)
     
     #Ecrire rasters de l'index de la dernière date utilisée, les coefficients, la zone utilisable
