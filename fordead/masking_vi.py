@@ -421,22 +421,6 @@ def get_dict_vi(path_dict_vi = None):
 
     """
     
-    # dict_vi = {"CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'},
-    #             "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'dieback_change_direction': '-'},
-    #             "BSI" : {"formula" : '(B4 + B2 - B3)/(B4 + B2 + B3)', 'dieback_change_direction' : '-'},
-    #             "NDWI" : {"formula" : '(B8A-B11)/(B8A+B11)', 'dieback_change_direction' : '-'},
-    #             "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'}}
-    #
-    # dict_vi = {"CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'},
-    #             "CRRE" : {"formula" : 'B5/(B4+((B6-B4)/(740-665))*(705-665))', 'dieback_change_direction' : '+'},
-    #             "NDWI" : {"formula" : '(B8A-B11)/(B8A+B11)', 'dieback_change_direction' : '-'},
-    #             "NDVI" : {'formula': '(B8-B4)/(B8+B4)', 'dieback_change_direction': '-'},
-    #             "IRECI" : {"formula" : '(B7-B4)/(B5/B6)', 'dieback_change_direction' : '+'},
-    #             "BSI" : {"formula" : '(B4 + B2 - B3)/(B4 + B2 + B3)', 'dieback_change_direction' : '-'},
-    #             "NBR" : {"formula" : '(B8-B12)/(B8+B12)', 'dieback_change_direction' : '-'},
-    #             }
-    
-    
     dict_vi = {
                 # "CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'dieback_change_direction': '+'}, Fordead origine sur la base longueur d'onde Sentinel-2B
                 "BSI" : {"formula" : '((B12+B4) - (B8+B2))/((B12+B4) + (B8+B2))', "name": "Bare Soil Index", 'dieback_change_direction' : '+', 'max_value' : 1}, 
@@ -444,8 +428,11 @@ def get_dict_vi(path_dict_vi = None):
                 "BSI3" : {"formula" : '(B4+B2-B3)/(B4+B2+B3)', "name": "Bare Soil Index 3", 'dieback_change_direction' : '+', 'max_value' : 1},
                 "CCCI" : {"formula" : '((B9-B5)/(B9+B5))/((B9-B4)/(B9+B4))', "name": "Canopy Chlorophyll Content Index", 'dieback_change_direction' : '+', 'max_value' : 1},
                 "EVI" : {"formula" : '2.5*((B8-B4)/(B8+6*B4 - 7.5*B2 + 1))', "name": "Enhanced Vegetation Index", 'dieback_change_direction' : '-', 'max_value' : 5},
-                "CRSWIR" : {'formula': 'B11/(B8 + ((B12-B8)/(2190-842))*(1610-842))', 'name': "Continuum Removal SWIR with B8 band", 'dieback_change_direction': '+', 'max_value' : 2}, # XL
-                "CRSWIR2" : {'formula': 'B11/(B8A + ((B12-B8A)/(2190-865))*(1610-865))', 'name': "Continuum Removal SWIR - original - with B8A band - ", 'dieback_change_direction': '+', 'max_value' : 2}, # Claessens et al. 2023
+
+                "CRSWIR" : {'formula': 'B11/(B8A+((B12-B8A)/(2185.7-864))*(1610.4-864))', 'name': "Continuum Removal SWIR with B8 band", 'dieback_change_direction': '+', 'max_value' : 2}, # XL
+
+                "CRSWIR2" : {'formula': 'B11/(B8 + ((B12-B8)/(2190-842))*(1610-842))', 'name': "Continuum Removal SWIR with B8 band", 'dieback_change_direction': '+', 'max_value' : 2}, # XL
+                "CRSWIR3" : {'formula': 'B11/(B8A + ((B12-B8A)/(2190-865))*(1610-865))', 'name': "Continuum Removal SWIR - original - with B8A band - ", 'dieback_change_direction': '+', 'max_value' : 2}, # Claessens et al. 2023
                 "CRRE" : {"formula" : 'B5/(B4 + ((B6-B4)/(740-665))*(705-665))', 'name': "Continuum Removal Red Edge", 'dieback_change_direction' : '+', 'max_value' : 2},
                 "CRRed" : {"formula" : 'B4/(B3 + ((B8-B3)/(842-560))*(665-560))', 'name': "Continuum Removal Red", 'dieback_change_direction' : '+', 'max_value' : 2},
                 "CRNIR" : {"formula" : 'B8/(B4 + ((B11-B4)/(1610-665))*(842-665))', 'name': "Continuum Removal NIR", 'dieback_change_direction' : '+', 'max_value' : 2},
