@@ -2,6 +2,9 @@ from tqdm import tqdm
 import numpy as np
 from datetime import datetime
 import multiprocessing
+import logging
+
+logger = logging.getLogger(__name__)
 
 from fordead.import_data import import_coeff_model, import_dieback_data, import_stress_data, initialize_dieback_data, initialize_stress_data, import_masked_vi, import_first_detection_date_index, TileInfo, import_binary_raster
 from fordead.writing_data import write_tif
@@ -152,12 +155,12 @@ def dieback_detection(
         last_date = new_dates[-1]
 
     if len(new_dates) == 0:
-        print("Dieback detection : no new dates")
+        logger.info("Dieback detection : no new dates")
         tile.getdict_datepaths("Anomalies",tile.paths["AnomaliesDir"]) # Get paths and dates to previously calculated anomalies
         tile.save_info()
         return True, last_date
 
-    print("Dieback detection : " + str(len(new_dates))+ " new dates")
+    logger.info("Dieback detection : " + str(len(new_dates))+ " new dates")
 
     first_detection_date_index = import_first_detection_date_index(tile.paths["first_detection_date_index"])
     coeff_model = import_coeff_model(tile.paths["coeff_model"])

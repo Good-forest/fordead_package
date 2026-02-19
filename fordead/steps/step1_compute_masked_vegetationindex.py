@@ -14,6 +14,7 @@ import numpy as np
 from tqdm import tqdm
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import logging
 
 import concurrent.futures
 #%% ===========================================================================
@@ -23,6 +24,8 @@ from fordead.cli.utils import empty_to_none
 from fordead.import_data import TileInfo, get_band_paths, get_cloudiness, import_resampled_sen_stack, import_soil_data, initialize_soil_data, get_raster_metadata
 from fordead.masking_vi import compute_masks, compute_vegetation_index, get_bands_and_formula, get_source_mask, compute_user_mask
 from fordead.writing_data import write_raster, write_tif
+
+logger = logging.getLogger(__name__)
 
 #%% =============================================================================
 #   FONCTIONS
@@ -201,19 +204,19 @@ def compute_masked_vegetationindex(
                                            extent_shape_path = extent_shape_path)  #Imports all raster metadata from one band. 
 
     if  len(new_dates) == 0:
-        print("Computing masks and vegetation index : no new dates")
+        logger.info("Computing masks and vegetation index : no new dates")
         tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
                             path_masks = tile.paths["MaskDir"])
         tile.save_info()
         return
-    print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
+    logger.info("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
 
     tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
     # Add XL - add SCL bands
     # tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11","SCL"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
     # if soil_detection:
     #     tile.used_bands.append("SCL")
-    print("Using bands : ", tile.used_bands)
+    logger.debug("Using bands : " + str(tile.used_bands))
 
     date = new_dates[0]
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
