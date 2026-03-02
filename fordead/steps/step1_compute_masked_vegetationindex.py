@@ -69,7 +69,11 @@ def process_one(tile, date, interpolation_order, compress_raster, compress_vi=Fa
 def process_batch_loop(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress):
     for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if not date in new_dates: continue
-        date, (stack_bands, invalid_values) = process_one(tile, date, interpolation_order, compress_raster, compress_vi)
+        try:
+            date, (stack_bands, invalid_values) = process_one(tile, date, interpolation_order, compress_raster, compress_vi)
+        except Exception as e:
+            print(e)
+            continue
         process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values)
 
     return soil_data
