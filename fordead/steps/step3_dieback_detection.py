@@ -20,7 +20,7 @@ def process_dieback(anomalies, diff_vi, mask, date_index, dieback_data, stress_d
 
 def process_one_wrapper(args): return process_one(*args)
 
-def process_one(tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi):
+def process_one(tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi, export_predicted=False, export_diff=False):
     # Make a local copy of the coefficient model to avoid sharing issues
     local_coeff_model = coeff_model.copy()
     
@@ -35,26 +35,30 @@ def process_one(tile, first_detection_date_index, coeff_model, date_index, date,
     anomalies, diff_vi = detection_anomalies(vegetation_index, mask, predicted_vi, threshold_anomaly,
                                              vi = vi, path_dict_vi = path_dict_vi)
 
-    # Add XL
-    write_tif(predicted_vi, first_detection_date_index.attrs, tile.paths["PredictedDir"] / str("PredictedVI_" + date + ".tif"),nodata=0)
     write_tif(anomalies, first_detection_date_index.attrs, tile.paths["AnomaliesDir"] / str("Anomalies_" + date + ".tif"),nodata=0)
+    # Add XL
+    if export_predicted:
+        write_tif(predicted_vi, first_detection_date_index.attrs, tile.paths["PredictedDir"] / str("PredictedVI_" + date + ".tif"),nodata=0)
+    if export_diff:
+        write_tif(diff_vi, first_detection_date_index.attrs, tile.paths["DiffVIDir"] / str("DiffVI_" + date + ".tif"),nodata=0) 
+
 
     del vegetation_index, predicted_vi
     return date, (anomalies, diff_vi, mask)
 
-def dieback_loop(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress=True):
+def dieback_loop(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress=True, export_predicted=False, export_diff=False):
     for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if not date in new_dates: continue
         date, (anomalies, diff_vi, mask) = process_one(tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi)
         dieback_data, stress_data = process_dieback_wrapper((anomalies, diff_vi, mask, date_index, dieback_data, stress_data, stress_index_mode, date))
     return dieback_data, stress_data
 
-def dieback_multithread(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress=True):
+def dieback_multithread(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress=True, export_predicted=False, export_diff=False):
     dieback_results = []
     workers = multiprocessing.cpu_count()
     with ProcessPoolExecutor(max_workers=workers) as executor:
         futures = [
-            executor.submit(process_one_wrapper, (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi))
+            executor.submit(process_one_wrapper, (tile, first_detection_date_index, coeff_model, date_index, date, forest_mask, threshold_anomaly, vi, path_dict_vi, export_predicted, export_diff))
             for date_index, date in enumerate(tile.dates) if date in new_dates
         ]
         for future in tqdm(as_completed(futures), total=len(futures), disable=not progress, desc="Processing"):
@@ -76,14 +80,16 @@ def dieback_multithread(tile, first_detection_date_index, coeff_model, new_dates
 
 def dieback_detection(
     data_directory,
-    threshold_anomaly=0.16,
+    threshold_anomaly = 0.16,
     max_nb_stress_periods = 5,
     stress_index_mode = None,
     vi = None,
     path_dict_vi = None,
-    progress=True,
-    multi_process=False,
-    batch_size=700
+    progress = True,
+    multi_process = False,
+    batch_size = 700,
+    export_predicted = False,
+    export_diff = False,
     ):
     """
     Detects anomalies by comparing the vegetation index and its prediction from the model. 
@@ -111,6 +117,14 @@ def dieback_detection(
         Path of text file to add vegetation index formula, only useful if step1 was skipped
     progress : bool, optional
         Whether to show a progress bar. Defaults to True.
+    multi_process : bool, optional
+        Whether to use multiprocessing for dieback detection. Defaults to False.
+    batch_size : int, optional
+        Number of dates to process in one batch. Defaults to 700.
+    export_predicted : bool, optional
+        Whether to export predicted vegetation index raster files. Defaults to False.
+    export_diff : bool, optional
+        Whether to export difference vegetation index raster files. Defaults to False.
     Returns
     -------
 
@@ -130,9 +144,14 @@ def dieback_detection(
     
     tile.add_dirpath("AnomaliesDir", tile.data_directory / "DataAnomalies") #Choose anomalies directory
     tile.getdict_datepaths("Anomalies",tile.paths["AnomaliesDir"]) # Get paths and dates to previously calculated anomalies
+    
     # Add XL
-    tile.add_dirpath("PredictedDir", tile.data_directory / "PredictedVI") #Choose anomalies directory
-    tile.getdict_datepaths("Predicted",tile.paths["PredictedDir"]) # Get paths and dates to previously calculated anomalies
+    if export_predicted:
+        tile.add_dirpath("PredictedDir", tile.data_directory / "PredictedVI") #Choose anomalies directory
+        tile.getdict_datepaths("Predicted",tile.paths["PredictedDir"]) # Get paths and dates to previously calculated anomalies
+    if export_diff:
+        tile.add_dirpath("DiffVIDir", tile.data_directory / "DiffVI") #Choose anomalies directory
+        tile.getdict_datepaths("DiffVI",tile.paths["DiffVIDir"]) # Get paths and dates to previously calculated anomalies   
 
     tile.search_new_dates() #Get list of all used dates
     
@@ -185,7 +204,7 @@ def dieback_detection(
     f = dieback_loop
     if multi_process:
         f = dieback_multithread
-    dieback_data, stress_data = f(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress)
+    dieback_data, stress_data = f(tile, first_detection_date_index, coeff_model, new_dates, forest_mask, threshold_anomaly, vi, path_dict_vi, stress_data, dieback_data, stress_index_mode, progress, export_predicted, export_diff)
 
     tile.last_computed_anomaly = new_dates[-1]
 

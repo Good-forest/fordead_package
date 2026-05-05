@@ -33,9 +33,9 @@ def process_one_wrapper(args):
 def process_mask_wrapper(args):
     return process_mask(*args)
 
-def process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values):
+def process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values, formula_soil_mask=None):
     if soil_detection:
-        mask = compute_masks(stack_bands, soil_data, date_index)
+        mask = compute_masks(stack_bands, soil_data, date_index, formula_soil_mask)
     else:
         mask = compute_user_mask(stack_bands, formula_mask)
 
@@ -63,15 +63,21 @@ def process_one(tile, date, interpolation_order, compress_raster, compress_vi=Fa
         write_raster(vegetation_index, tile.paths["VegetationIndexDir"] / ("VegetationIndex_"+date+".nc"), compress_vi)
     return date, (stack_bands, invalid_values)
 
-def process_batch_loop(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress):
+# Add XL : formula_soil_mask parameter
+def process_batch_loop(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress, formula_soil_mask=None):
+
+    if soil_detection:
+        print(f"***********************\nProcess Mask WITH soil detection [compute_mask] with formula_soil_mask={formula_soil_mask}\n***********************")
+    else:
+        print(f"***********************\nProcess Mask WITHOUT soil detection [compute_user_mask] with formula_mask={formula_mask}\n***********************")
+
     for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if not date in new_dates: continue
         date, (stack_bands, invalid_values) = process_one(tile, date, interpolation_order, compress_raster, compress_vi)
-        process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values)
-
+        process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values, formula_soil_mask)
     return soil_data
 
-def process_batch_multithread(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress):
+def process_batch_multithread(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress, formula_soil_mask=None):
     vi_results = []
     with ProcessPoolExecutor(max_workers=multiprocessing.cpu_count()) as executor:
         futures = [
@@ -90,7 +96,7 @@ def process_batch_multithread(tile, new_dates, soil_data, interpolation_order, s
 
     for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if date not in new_dates: continue
-        process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]))
+        process_mask_wrapper((tile, date, date_index, soil_data, mask_values[date]["stack_bands"], sentinel_source, apply_source_mask, soil_detection, formula_mask, mask_values[date]["invalid_values"]), formula_soil_mask)
     return soil_data
 
 def compute_masked_vegetationindex(
@@ -104,6 +110,7 @@ def compute_masked_vegetationindex(
     apply_source_mask = False,
     soil_detection = True,
     formula_mask = "(B2 >= 700)",
+    formula_soil_mask = None,
     vi = "CRSWIR",
     compress_vi = False,
     compress_raster = True,
@@ -139,6 +146,9 @@ def compute_masked_vegetationindex(
         If True, bare ground is detected and used as mask, but the process has not been tested on other data than THEIA data in France (see https://fordead.gitlab.io/fordead_package/docs/user_guides/english/01_compute_masked_vegetationindex/). If False, mask from formula_mask is applied.
     formula_mask : str
         formula whose result would be binary, as described here https://fordead.gitlab.io/fordead_package/reference/fordead/masking_vi/#compute_vegetation_index. Is only used if soil_detection is False.
+    formula_soil_mask : str
+        formula whose result would be binary, as described here https://fordead.gitlab.io/fordead_package/reference/fordead/masking_vi/#compute_vegetation_index. Is only used if soil_detection is True.
+        Default is None, in which case the soil mask will be computed with the formula "(B11 > 1250) & (B2 < 600) & ((B3 + B4) > 800)".
     vi : str
         Chosen vegetation index
     compress_vi : bool
@@ -208,7 +218,7 @@ def compute_masked_vegetationindex(
         return
     print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
 
-    tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
+    tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8", "B8A", "B11", "B12"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
     # Add XL - add SCL bands
     # tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11","SCL"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
     # if soil_detection:
@@ -232,7 +242,8 @@ def compute_masked_vegetationindex(
     f = process_batch_loop
     if multi_process:
         f = process_batch_multithread
-    soil_data = f(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress)
+    # print("Using soil mask formula :", formula_soil_mask)
+    soil_data = f(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress, formula_soil_mask)
     if soil_detection:
         write_tif(soil_data["state"], tile.raster_meta["attrs"],tile.paths["state_soil"],nodata=0)
         write_tif(soil_data["first_date"], tile.raster_meta["attrs"],tile.paths["first_date_soil"],nodata=0)

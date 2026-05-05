@@ -556,6 +556,10 @@ def get_date_cloudiness_perc(date_paths, sentinel_source: str):
         cloud_mask = rioxarray.open_rasterio(date_paths["Mask"])
         NbPixels = (cloud_mask!=0).sum()
         NbCloudyPixels = (~cloud_mask.isin([4,5])).sum()
+        # Add XL: alternative way to count cloudy pixels
+        # NbCloudyPixels = (~cloud_mask.isin([4,5,10])).sum()
+        ## n'a aucun impact car le taux de pourcentage de nuages n'est pas calculé car images from GEE et pas de directory 'cloudiness' dans TileInfo
+
     
     if NbPixels==0: #If outside of satellite swath
         return 2.0
