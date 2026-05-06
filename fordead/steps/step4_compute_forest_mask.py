@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 
 import click
+import logging
 from fordead.cli.utils import empty_to_none
+
+logger = logging.getLogger(__name__)
 from fordead.import_data import TileInfo, import_binary_raster, get_raster_metadata, clip_xarray
 from fordead.masking_vi import rasterize_bdforet, clip_oso, raster_full, rasterize_vector
 from fordead.writing_data import write_tif
@@ -96,34 +99,34 @@ def compute_forest_mask(data_directory,
 
     
     if tile.paths["forest_mask"].exists():
-        print("Forest mask already calculated")
+        logger.info("Forest mask already calculated")
         tile.save_info()
     else:
         if path_example_raster is None : path_example_raster = tile.paths["Masks"][tile.dates[-1]]
         
         if forest_mask_source is None:
-            print("No mask used, computing forest mask with every pixel marked as True")
+            logger.info("No mask used, computing forest mask with every pixel marked as True")
             forest_mask = raster_full(path_example_raster, fill_value = 1, dtype = bool)
             
         elif Path(forest_mask_source).is_file():
-            print("Importing " + forest_mask_source)
+            logger.info("Importing " + forest_mask_source)
             forest_mask = clip_xarray(array = import_binary_raster(forest_mask_source), 
                                       extent = get_raster_metadata(path_example_raster)["extent"])
             
         elif forest_mask_source=="BDFORET":
-            print("Computing forest mask from BDFORET")
+            logger.info("Computing forest mask from BDFORET")
             forest_mask = rasterize_bdforet(path_example_raster, dep_path, bdforet_dirpath, list_forest_type = list_forest_type)
             
         elif  forest_mask_source=="OSO":
-            print("Computing forest mask from OSO")
+            logger.info("Computing forest mask from OSO")
             forest_mask = clip_oso(path_oso, path_example_raster, list_code_oso)
             
         elif forest_mask_source == "vector":
-            print("Computing mask from vector")
+            logger.info("Computing mask from vector")
             forest_mask = rasterize_vector(vector_path, path_example_raster)
             
         else:
-            print("Unrecognized forest_mask_source")
+            logger.error("Unrecognized forest_mask_source")
         
         
         write_tif(forest_mask, forest_mask.attrs, nodata = 0, path = tile.paths["forest_mask"])

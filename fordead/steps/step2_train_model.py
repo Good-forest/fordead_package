@@ -8,6 +8,9 @@ import click
 from fordead.import_data import import_stackedmaskedVI, TileInfo, get_raster_metadata
 from fordead.model_vegetation_index import get_detection_dates, model_vi, model_vi_correction
 from fordead.writing_data import write_tif
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @click.command(name='train_model')
@@ -91,7 +94,7 @@ def train_model(
     tile.add_path("sufficient_coverage_mask", tile.data_directory / "TimelessMasks" / "sufficient_coverage_mask.tif")
     
     if tile.paths["coeff_model"].exists():
-        print("Model already calculated")
+        logger.info("Model already calculated")
         tile.save_info()
         return
     tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],

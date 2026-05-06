@@ -14,6 +14,7 @@ import numpy as np
 from tqdm import tqdm
 import multiprocessing
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import logging
 
 import concurrent.futures
 #%% ===========================================================================
@@ -23,6 +24,8 @@ from fordead.cli.utils import empty_to_none
 from fordead.import_data import TileInfo, get_band_paths, get_cloudiness, import_resampled_sen_stack, import_soil_data, initialize_soil_data, get_raster_metadata
 from fordead.masking_vi import compute_masks, compute_vegetation_index, get_bands_and_formula, get_source_mask, compute_user_mask
 from fordead.writing_data import write_raster, write_tif
+
+logger = logging.getLogger(__name__)
 
 #%% =============================================================================
 #   FONCTIONS
@@ -73,8 +76,13 @@ def process_batch_loop(tile, new_dates, soil_data, interpolation_order, sentinel
 
     for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if not date in new_dates: continue
-        date, (stack_bands, invalid_values) = process_one(tile, date, interpolation_order, compress_raster, compress_vi)
-        process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values, formula_soil_mask)
+        try:
+            date, (stack_bands, invalid_values) = process_one(tile, date, interpolation_order, compress_raster, compress_vi)
+        except Exception as e:
+            print(e)
+            continue
+        process_mask(tile, date, date_index, soil_data, stack_bands, sentinel_source, apply_source_mask, soil_detection, formula_mask, invalid_values)
+
     return soil_data
 
 def process_batch_multithread(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress, formula_soil_mask=None):
@@ -211,19 +219,19 @@ def compute_masked_vegetationindex(
                                            extent_shape_path = extent_shape_path)  #Imports all raster metadata from one band. 
 
     if  len(new_dates) == 0:
-        print("Computing masks and vegetation index : no new dates")
+        logger.info("Computing masks and vegetation index : no new dates")
         tile.getdict_paths(path_vi = tile.paths["VegetationIndexDir"],
                             path_masks = tile.paths["MaskDir"])
         tile.save_info()
         return
-    print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
+    logger.info("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
 
     tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8", "B8A", "B11", "B12"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
     # Add XL - add SCL bands
     # tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11","SCL"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
     # if soil_detection:
     #     tile.used_bands.append("SCL")
-    print("Using bands : ", tile.used_bands)
+    logger.debug("Using bands : " + str(tile.used_bands))
 
     date = new_dates[0]
     stack_bands = import_resampled_sen_stack(tile.paths["Sentinel"][date], tile.used_bands, interpolation_order = interpolation_order, extent = tile.raster_meta["extent"])
