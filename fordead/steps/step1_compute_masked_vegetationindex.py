@@ -67,9 +67,9 @@ def process_one(tile, date, interpolation_order, compress_raster, compress_vi=Fa
 def process_batch_loop(tile, new_dates, soil_data, interpolation_order, sentinel_source, apply_source_mask, soil_detection, formula_mask, compress_raster, compress_vi, progress, formula_soil_mask=None):
 
     if soil_detection:
-        print(f"***********************\nProcess Mask WITH soil detection [compute_mask] with formula_soil_mask={formula_soil_mask}\n***********************")
+        print(f"**********************************************\nProcess Mask WITH soil detection [compute_mask] with 'formula_soil_mask' : {formula_soil_mask}\n**********************************************")
     else:
-        print(f"***********************\nProcess Mask WITHOUT soil detection [compute_user_mask] with formula_mask={formula_mask}\n***********************")
+        print(f"**********************************************\nProcess Mask WITHOUT soil detection [compute_user_mask] with 'formula_mask' : {formula_mask}\n**********************************************")
 
     for date_index, date in enumerate(tqdm(tile.dates, disable=not progress, desc="Processing")):
         if not date in new_dates: continue
