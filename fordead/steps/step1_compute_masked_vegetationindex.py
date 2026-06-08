@@ -218,7 +218,7 @@ def compute_masked_vegetationindex(
         return
     print("Computing masks and vegetation index : " + str(len(new_dates))+ " new dates")
 
-    tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8", "B8A", "B11", "B12"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
+    tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B5", "B8", "B8A", "B11", "B12"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
     # Add XL - add SCL bands
     # tile.used_bands, tile.vi_formula = get_bands_and_formula(vi, path_dict_vi = path_dict_vi, forced_bands = ["B2","B3","B4", "B8A","B11","SCL"] if soil_detection else get_bands_and_formula(formula = formula_mask)[0])
     # if soil_detection:
